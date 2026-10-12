@@ -16,8 +16,9 @@ async function mount(markup=tableHTML){
   const media={matches:true,addEventListener:(event,fn)=>{resize=fn}};
   window.matchMedia=()=>media;window.scrollTo=()=>{};
   const navigator={onLine:true},timers=new Set();
-  const raf=fn=>{const timer=setTimeout(()=>{timers.delete(timer);fn()},0);timers.add(timer);return timer};
-  vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/mobile.js'),'utf8'),vm.createContext({window,document,navigator,HTMLElement:window.HTMLElement,customElements:window.customElements,MutationObserver:window.MutationObserver,requestAnimationFrame:raf,WeakSet}));
+  const later=(fn,delay=0)=>{const timer=setTimeout(()=>{timers.delete(timer);fn()},delay);timers.add(timer);return timer};
+  const raf=fn=>later(fn);
+  vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/mobile.js'),'utf8'),vm.createContext({window,document,navigator,HTMLElement:window.HTMLElement,customElements:window.customElements,MutationObserver:window.MutationObserver,requestAnimationFrame:raf,setTimeout:later,WeakSet}));
   await wait();
   return {window,document,media,navigator,resize:()=>resize(),cleanup(){for(const timer of timers)clearTimeout(timer);document.querySelector('crm-connection-status')?.remove()}};
 }
@@ -66,7 +67,11 @@ test('mobile navigation traps focus and returns it when closed',async()=>{
     sidebar.classList.add('is-open');await wait();
     assert.equal(sidebar.hasAttribute('inert'),false);assert.ok(main.hasAttribute('inert'));assert.ok(app.document.documentElement.classList.contains('crm-scroll-locked'));
     assert.equal(app.document.activeElement,sidebar.querySelector('.sidebar__close'));
-    sidebar.querySelector('.nav-item').focus();const tab=new app.window.Event('keydown',{bubbles:true,cancelable:true});tab.key='Tab';app.document.dispatchEvent(tab);
+    menu.focus();await new Promise(resolve=>setTimeout(resolve,80));
+    assert.equal(app.document.activeElement,sidebar.querySelector('.sidebar__close'));
+    sidebar.querySelector('.nav-item').focus();await new Promise(resolve=>setTimeout(resolve,80));
+    assert.equal(app.document.activeElement,sidebar.querySelector('.nav-item'));
+    const tab=new app.window.Event('keydown',{bubbles:true,cancelable:true});tab.key='Tab';app.document.dispatchEvent(tab);
     assert.equal(app.document.activeElement,sidebar.querySelector('.sidebar__close'));assert.ok(tab.defaultPrevented);
     sidebar.classList.remove('is-open');await wait();
     assert.equal(main.hasAttribute('inert'),false);assert.equal(app.document.activeElement,menu);assert.equal(app.document.documentElement.classList.contains('crm-scroll-locked'),false);

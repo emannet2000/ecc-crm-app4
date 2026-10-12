@@ -33,6 +33,16 @@
   const inert = (element, value) => element?.toggleAttribute('inert', value);
   const focusable = root => [...root.querySelectorAll('a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex="0"]')].filter(element => !element.closest('[inert]') && !element.hidden && element.getClientRects().length > 0);
 
+  function focusDrawer(sidebar, attempt = 0) {
+    if (drawer !== sidebar || !sidebar.isConnected || !mobile.matches || !sidebar.classList.contains('is-open')) return;
+    if (!sidebar.contains(document.activeElement)) {
+      (sidebar.querySelector('.sidebar__close') || focusable(sidebar)[0])?.focus({preventScroll:true});
+    }
+    // Opening can finish between pointer-up and the visibility transition.
+    // Retry briefly without moving focus away from a control chosen by the user.
+    if (attempt < 8) setTimeout(() => focusDrawer(sidebar, attempt + 1), 50);
+  }
+
   function syncNavigation() {
     const sidebar = document.querySelector('.sidebar');
     const open = !!(mobile.matches && sidebar?.classList.contains('is-open'));
@@ -49,7 +59,7 @@
     if (open && drawer !== sidebar) {
       returnFocus = document.activeElement;
       drawer = sidebar;
-      requestAnimationFrame(() => { if (drawer === sidebar) (sidebar.querySelector('.sidebar__close') || focusable(sidebar)[0])?.focus(); });
+      requestAnimationFrame(() => focusDrawer(sidebar));
     } else if (open && !sidebar.contains(document.activeElement)) {
       (sidebar.querySelector('.sidebar__close') || focusable(sidebar)[0])?.focus();
     } else if (!open && drawer) {

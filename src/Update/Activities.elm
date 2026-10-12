@@ -178,7 +178,7 @@ update msg model =
         ConfirmedDeleteActivity ->
             case ( model.deletingActivity, model.token ) of
                 ( Just activity, Just token ) ->
-                    ( model, Api.deleteActivity token activity.id GotDeletedActivity )
+                    ( model, Api.deleteActivity token activity.id activity.revision GotDeletedActivity )
 
                 _ ->
                     ( model, Cmd.none )

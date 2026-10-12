@@ -41,23 +41,20 @@ test('performance reports display full server aggregates',async()=>{
  const app=await mount('insights');try{assert.ok(app.element.shadowRoot.querySelector(".tools").textContent.includes('501'));assert.ok(app.calls.some(c=>c.url.startsWith('/api/insights')));assert.ok(app.element.shadowRoot.querySelector(".tools").textContent.includes('Lead conversion by source'))}finally{app.cleanup()}
 });
 
-test('record version headers stay tied to the form snapshot during background refresh',async()=>{
- const {window}=parseHTML('<html><body></body></html>');let version='version-one';
- class FakeXHR{
-  constructor(){this.headers={};this.listeners={};this.status=200}
-  open(method,url){this.method=method;this.url=url}
-  setRequestHeader(key,value){this.headers[key]=value}
-  addEventListener(key,callback){this.listeners[key]=callback}
-  send(){this.responseText=JSON.stringify({contact:{id:'client',_revision:version}});this.readyState=4;this.listeners.readystatechange?.();this.listeners.load?.()}
- }
- const context=vm.createContext({window,document:window.document,location:{href:'http://crm.test/',origin:'http://crm.test'},URL,CustomEvent:window.CustomEvent,XMLHttpRequest:FakeXHR,MutationObserver:window.MutationObserver,Map,JSON});
- vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/record-versions.js'),'utf8'),context);
- const get=()=>{const request=new FakeXHR();request.open('GET','/api/contacts/client');request.send()};
- get();const dialog=window.document.createElement('div');dialog.className='modal-panel';window.document.body.append(dialog);await new Promise(resolve=>setTimeout(resolve,0));
- version='version-two';get();const old=new FakeXHR();old.open('PUT','/api/contacts/client');old.send('{}');assert.equal(old.headers['If-Match'],'version-one');
- dialog.remove();await new Promise(resolve=>setTimeout(resolve,0));const fresh=new FakeXHR();fresh.open('DELETE','/api/contacts/client');fresh.send();assert.equal(fresh.headers['If-Match'],'version-two');
+test('draft storage keeps explicitly supplied record keys separate without inspecting forms or requests',()=>{
+ const data=new Map(),responses=[];let receive;
+ const app={ports:{draftStorage:{subscribe(callback){receive=callback}},storedDraft:{send(value){responses.push(value)}}}};
+ const window={};const sessionStorage={getItem:key=>data.get(key)||null,setItem:(key,value)=>data.set(key,value),removeItem:key=>data.delete(key)};
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../public/draft-storage.js'),'utf8'),vm.createContext({window,sessionStorage,JSON}));
+ window.connectDraftStorage(app);
+ receive({action:'write',key:'user-one/contact-one',fields:{name:'First draft',revision:'version-one'}});
+ receive({action:'write',key:'user-one/contact-two',fields:{name:'Second draft',revision:'version-two'}});
+ receive({action:'read',key:'user-one/contact-one'});
+ assert.equal(responses.at(-1).fields.name,'First draft');assert.equal(responses.at(-1).fields.revision,'version-one');
+ receive({action:'read',key:'user-two/contact-one'});assert.equal(responses.at(-1).fields,null);
+ receive({action:'remove',key:'user-one/contact-one'});receive({action:'read',key:'user-one/contact-one'});assert.equal(responses.at(-1).fields,null);
+ receive({action:'read',key:'user-one/contact-two'});assert.equal(responses.at(-1).fields.name,'Second draft');
 });
-
 
 test('unconfigured email keeps history available without offering a send action',async()=>{
  const app=await mount('contacts','c_client',{smtp:false});try{

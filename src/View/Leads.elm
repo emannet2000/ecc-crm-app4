@@ -3,14 +3,16 @@ module View.Leads exposing (deleteLeadConfirmModal, leadDetailView, leadFormModa
 {-| Leads: list, detail, form.
 -}
 
+import View.Drafts
+import Update.Access
 import Html exposing (..)
 import Html.Attributes as Attr exposing (class, disabled, for, id, placeholder, type_, value)
-import Html.Events exposing (onCheck, onClick, onInput, onSubmit)
+import Html.Events exposing (onClick, onInput, onSubmit)
 import Json.Decode as D
 import Svg
 import Types exposing (..)
 import View.StaffPicker as StaffPicker
-import View.Helpers exposing (detailCard, detailStat, infoRow, initials, paginationBar, svgIcon, svgPath)
+import View.Helpers exposing (onCheck, detailCard, detailStat, infoRow, initials, paginationBar, svgIcon, svgPath)
 import View.Icons exposing (iconBack, iconCalendar, iconContacts, iconDeals, iconEdit, iconMail, iconPhone, iconPin, iconTasks, iconTrash, iconUserTiny)
 
 
@@ -110,6 +112,7 @@ leadRow l =
                 , type_ "button"
                 , Attr.title "Edit"
                 , Attr.attribute "aria-label" ("Edit " ++ l.name)
+                , Attr.disabled (not l.editable)
                 , Html.Events.stopPropagationOn "click"
                     (D.succeed ( OpenedEditLead l, True ))
                 ]
@@ -119,6 +122,7 @@ leadRow l =
                 , type_ "button"
                 , Attr.title "Delete"
                 , Attr.attribute "aria-label" ("Delete " ++ l.name)
+                , Attr.disabled (not l.editable)
                 , Html.Events.stopPropagationOn "click"
                     (D.succeed ( RequestedDeleteLead l, True ))
                 ]
@@ -199,6 +203,7 @@ leadsView model =
                     , button
                         [ class "ecc-btn ecc-btn--inline"
                         , type_ "button"
+                        , Attr.disabled (not (Update.Access.canCreate model))
                         , onClick OpenedAddLead
                         ]
                         [ text "Add lead" ]
@@ -228,7 +233,8 @@ leadsView model =
                                 [ button
                                     [ class "ecc-btn ecc-btn--inline"
                                     , type_ "button"
-                                    , onClick OpenedAddLead
+                                    , Attr.disabled (not (Update.Access.canCreate model))
+                        , onClick OpenedAddLead
                                     ]
                                     [ text "Add your first lead" ]
                                 ]
@@ -322,7 +328,8 @@ leadDetailView _ l =
                 , button
                     [ class "ecc-btn ecc-btn--ghost ecc-btn--inline"
                     , type_ "button"
-                    , onClick (OpenedEditLead l)
+                    , Attr.disabled (not l.editable)
+            , onClick (OpenedEditLead l)
                     ]
                     [ iconEdit
                     , span [] [ text "Edit" ]
@@ -330,7 +337,8 @@ leadDetailView _ l =
                 , button
                     [ class "ecc-btn ecc-btn--danger ecc-btn--inline"
                     , type_ "button"
-                    , onClick (RequestedDeleteLead l)
+                    , Attr.disabled (not l.editable)
+            , onClick (RequestedDeleteLead l)
                     ]
                     [ iconTrash
                     , span [] [ text "Delete" ]
@@ -510,7 +518,7 @@ leadFormView model lf isEdit =
                 "Save lead"
     in
     form [ onSubmit SubmittedLeadForm, Attr.novalidate True ]
-        [ Html.node "crm-draft-recovery" [] []
+        [ View.Drafts.view model
         , case formError of
             Just msg ->
                 div [ class "ecc-alert ecc-alert--error" ] [ text msg ]

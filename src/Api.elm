@@ -15,6 +15,8 @@ import Url
 caseDecoder : D.Decoder Case
 caseDecoder =
     D.succeed Case
+        |> andMap (optString "_revision")
+        |> andMap (D.oneOf [ D.field "_editable" D.bool, D.succeed False ])
         |> andMap (D.field "id" D.string)
         |> andMap (optString "caseNumber")
         |> andMap (optString "clientId")
@@ -45,6 +47,8 @@ caseDecoder =
 documentDecoder : D.Decoder Document
 documentDecoder =
     D.succeed Document
+        |> andMap (optString "_revision")
+        |> andMap (D.oneOf [ D.field "_editable" D.bool, D.succeed False ])
         |> andMap (D.field "id" D.string)
         |> andMap (optString "caseId")
         |> andMap (optString "caseNumber")
@@ -74,6 +78,8 @@ documentsDecoder =
 invoiceDecoder : D.Decoder Invoice
 invoiceDecoder =
     D.succeed Invoice
+        |> andMap (optString "_revision")
+        |> andMap (D.oneOf [ D.field "_editable" D.bool, D.succeed False ])
         |> andMap (optString "currency")
         |> andMap (D.field "id" D.string)
         |> andMap (optString "invoiceNumber")
@@ -101,6 +107,8 @@ invoiceDecoder =
 paymentDecoder : D.Decoder Payment
 paymentDecoder =
     D.succeed Payment
+        |> andMap (optString "_revision")
+        |> andMap (D.oneOf [ D.field "_editable" D.bool, D.succeed False ])
         |> andMap (optString "currency")
         |> andMap (D.field "id" D.string)
         |> andMap (optString "invoiceId")
@@ -123,6 +131,8 @@ paymentsDecoder =
 partnerDecoder : D.Decoder Partner
 partnerDecoder =
     D.succeed Partner
+        |> andMap (optString "_revision")
+        |> andMap (D.oneOf [ D.field "_editable" D.bool, D.succeed False ])
         |> andMap (D.field "id" D.string)
         |> andMap (D.oneOf [ D.field "type" D.string, D.succeed "School" ])
         |> andMap (D.field "legalCompanyName" D.string)
@@ -933,7 +943,7 @@ updateCase : String -> String -> CaseForm -> (Result ApiError Case -> msg) -> Cm
 updateCase token id cf toMsg =
     Http.request
         { method = "PUT"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token), Http.header "Content-Type" "application/json" ]
+        , headers = Http.header "If-Match" cf.revision ::  [ Http.header "Authorization" ("Bearer " ++ token), Http.header "Content-Type" "application/json" ]
         , url = "/api/cases/" ++ id
         , body = Http.jsonBody (caseFormPayload cf)
         , expect = savedCaseExpect toMsg
@@ -942,11 +952,11 @@ updateCase token id cf toMsg =
         }
 
 
-deleteCase : String -> String -> (Result String String -> msg) -> Cmd msg
-deleteCase token id toMsg =
+deleteCase : String -> String -> String -> (Result String String -> msg) -> Cmd msg
+deleteCase token id revision toMsg =
     Http.request
         { method = "DELETE"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = Http.header "If-Match" revision :: [ Http.header "Authorization" ("Bearer " ++ token) ]
         , url = "/api/cases/" ++ id
         , body = Http.emptyBody
         , expect = deletedCaseExpect toMsg
@@ -1003,7 +1013,7 @@ updateDocument : String -> String -> String -> DocumentForm -> (Result ApiError 
 updateDocument token caseId id df toMsg =
     Http.request
         { method = "PUT"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token), Http.header "Content-Type" "application/json" ]
+        , headers = Http.header "If-Match" df.revision ::  [ Http.header "Authorization" ("Bearer " ++ token), Http.header "Content-Type" "application/json" ]
         , url = "/api/documents/" ++ id
         , body =
             Http.jsonBody
@@ -1030,11 +1040,11 @@ updateDocument token caseId id df toMsg =
         }
 
 
-updateDocumentStatus : String -> String -> String -> (Result ApiError Document -> msg) -> Cmd msg
-updateDocumentStatus token id newStatus toMsg =
+updateDocumentStatus : String -> String -> String -> String -> (Result ApiError Document -> msg) -> Cmd msg
+updateDocumentStatus token id revision newStatus toMsg =
     Http.request
         { method = "PATCH"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token), Http.header "Content-Type" "application/json" ]
+        , headers = Http.header "If-Match" revision :: [ Http.header "Authorization" ("Bearer " ++ token), Http.header "Content-Type" "application/json" ]
         , url = "/api/documents/" ++ id ++ "/status"
         , body = Http.jsonBody (E.object [ ( "status", E.string newStatus ), ( "rejectionReason", E.string "" ) ])
         , expect = savedDocumentExpect toMsg
@@ -1043,11 +1053,11 @@ updateDocumentStatus token id newStatus toMsg =
         }
 
 
-deleteDocument : String -> String -> (Result String String -> msg) -> Cmd msg
-deleteDocument token id toMsg =
+deleteDocument : String -> String -> String -> (Result String String -> msg) -> Cmd msg
+deleteDocument token id revision toMsg =
     Http.request
         { method = "DELETE"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = Http.header "If-Match" revision :: [ Http.header "Authorization" ("Bearer " ++ token) ]
         , url = "/api/documents/" ++ id
         , body = Http.emptyBody
         , expect = deletedDocumentExpect toMsg
@@ -1107,7 +1117,7 @@ updateInvoice : String -> String -> InvoiceForm -> (Result ApiError Invoice -> m
 updateInvoice token id inv toMsg =
     Http.request
         { method = "PUT"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token), Http.header "Content-Type" "application/json" ]
+        , headers = Http.header "If-Match" inv.revision ::  [ Http.header "Authorization" ("Bearer " ++ token), Http.header "Content-Type" "application/json" ]
         , url = "/api/invoices/" ++ id
         , body = Http.jsonBody (invoiceFormPayload inv)
         , expect = savedInvoiceExpect toMsg
@@ -1116,11 +1126,11 @@ updateInvoice token id inv toMsg =
         }
 
 
-refundInvoice : String -> String -> String -> (Result ApiError Invoice -> msg) -> Cmd msg
-refundInvoice token id reason toMsg =
+refundInvoice : String -> String -> String -> String -> (Result ApiError Invoice -> msg) -> Cmd msg
+refundInvoice token id revision reason toMsg =
     Http.request
         { method = "POST"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token), Http.header "Content-Type" "application/json" ]
+        , headers = Http.header "If-Match" revision :: [ Http.header "Authorization" ("Bearer " ++ token), Http.header "Content-Type" "application/json" ]
         , url = "/api/invoices/" ++ id ++ "/refund"
         , body = Http.jsonBody (E.object [ ( "reason", E.string reason ) ])
         , expect = savedInvoiceExpect toMsg
@@ -1129,11 +1139,11 @@ refundInvoice token id reason toMsg =
         }
 
 
-deleteInvoice : String -> String -> (Result String String -> msg) -> Cmd msg
-deleteInvoice token id toMsg =
+deleteInvoice : String -> String -> String -> (Result String String -> msg) -> Cmd msg
+deleteInvoice token id revision toMsg =
     Http.request
         { method = "DELETE"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = Http.header "If-Match" revision :: [ Http.header "Authorization" ("Bearer " ++ token) ]
         , url = "/api/invoices/" ++ id
         , body = Http.emptyBody
         , expect = deletedInvoiceExpect toMsg
@@ -1168,11 +1178,11 @@ createPayment token invoiceId pf toMsg =
         }
 
 
-deletePayment : String -> String -> (Result String String -> msg) -> Cmd msg
-deletePayment token id toMsg =
+deletePayment : String -> String -> String -> (Result String String -> msg) -> Cmd msg
+deletePayment token id revision toMsg =
     Http.request
         { method = "DELETE"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = Http.header "If-Match" revision :: [ Http.header "Authorization" ("Bearer " ++ token) ]
         , url = "/api/payments/" ++ id
         , body = Http.emptyBody
         , expect = deletedPaymentExpect toMsg
@@ -1242,7 +1252,7 @@ updatePartner : String -> String -> PartnerForm -> (Result ApiError Partner -> m
 updatePartner token id pf toMsg =
     Http.request
         { method = "PUT"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token), Http.header "Content-Type" "application/json" ]
+        , headers = Http.header "If-Match" pf.revision ::  [ Http.header "Authorization" ("Bearer " ++ token), Http.header "Content-Type" "application/json" ]
         , url = "/api/partners/" ++ id
         , body = Http.jsonBody (partnerFormPayload pf)
         , expect = savedPartnerExpect toMsg
@@ -1251,11 +1261,11 @@ updatePartner token id pf toMsg =
         }
 
 
-deletePartner : String -> String -> (Result String String -> msg) -> Cmd msg
-deletePartner token id toMsg =
+deletePartner : String -> String -> String -> (Result String String -> msg) -> Cmd msg
+deletePartner token id revision toMsg =
     Http.request
         { method = "DELETE"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = Http.header "If-Match" revision :: [ Http.header "Authorization" ("Bearer " ++ token) ]
         , url = "/api/partners/" ++ id
         , body = Http.emptyBody
         , expect = deletedPartnerExpect toMsg
@@ -1340,9 +1350,9 @@ contactExtrasDecoder =
 
 contactDecoder : D.Decoder Contact
 contactDecoder =
-    D.map2
-        (\core extras ->
-            Contact
+    D.map4
+        (\core extras revision editable ->
+            Contact revision editable
                 core.id
                 core.name
                 core.email
@@ -1359,6 +1369,8 @@ contactDecoder =
         )
         contactCoreDecoder
         contactExtrasDecoder
+        (optString "_revision")
+        (D.oneOf [ D.field "_editable" D.bool, D.succeed False ])
 
 
 contactsDecoder : D.Decoder (List Contact)
@@ -1369,6 +1381,8 @@ contactsDecoder =
 schoolDecoder : D.Decoder School
 schoolDecoder =
     D.succeed School
+        |> andMap (optString "_revision")
+        |> andMap (D.oneOf [ D.field "_editable" D.bool, D.succeed False ])
         |> andMap (D.field "id" D.string)
         |> andMap (D.field "name" D.string)
         |> andMap (optString "countryCode")
@@ -1385,6 +1399,8 @@ schoolDecoder =
 studentDecoder : D.Decoder Student
 studentDecoder =
     D.succeed Student
+        |> andMap (optString "_revision")
+        |> andMap (D.oneOf [ D.field "_editable" D.bool, D.succeed False ])
         |> andMap (D.field "id" D.string)
         |> andMap (D.field "name" D.string)
         |> andMap (optString "studentCode")
@@ -1405,6 +1421,8 @@ studentDecoder =
 agentDecoder : D.Decoder Agent
 agentDecoder =
     D.succeed Agent
+        |> andMap (optString "_revision")
+        |> andMap (D.oneOf [ D.field "_editable" D.bool, D.succeed False ])
         |> andMap (D.field "id" D.string)
         |> andMap (D.field "name" D.string)
         |> andMap (optString "agentCode")
@@ -1420,6 +1438,8 @@ agentDecoder =
 leadDecoder : D.Decoder Lead
 leadDecoder =
     D.succeed Lead
+        |> andMap (optString "_revision")
+        |> andMap (D.oneOf [ D.field "_editable" D.bool, D.succeed False ])
         |> andMap (D.field "id" D.string)
         |> andMap (optString "leadNumber")
         |> andMap (D.field "name" D.string)
@@ -1442,8 +1462,10 @@ leadDecoder =
 
 activityDecoder : D.Decoder Activity
 activityDecoder =
-    D.map Activity
-        (D.field "id" D.string)
+    D.succeed Activity
+        |> andMap (optString "_revision")
+        |> andMap (D.oneOf [ D.field "_editable" D.bool, D.succeed False ])
+        |> andMap (D.field "id" D.string)
         |> andMap (D.field "contactId" D.string)
         |> andMap (optString "dealId")
         |> andMap (D.field "kind" D.string)
@@ -1649,9 +1671,9 @@ dealExtrasDecoder =
 
 dealDecoder : D.Decoder Deal
 dealDecoder =
-    D.map4
-        (\core extras probability ownerId ->
-            Deal
+    D.map6
+        (\core extras probability ownerId revision editable ->
+            Deal revision editable
                 core.id
                 core.title
                 core.contactId
@@ -1670,6 +1692,8 @@ dealDecoder =
         dealExtrasDecoder
         (D.maybe (D.field "probability" D.float))
         (optString "ownerId")
+        (optString "_revision")
+        (D.oneOf [ D.field "_editable" D.bool, D.succeed False ])
 
 
 dealsDecoder : D.Decoder (List Deal)
@@ -2577,7 +2601,10 @@ deletedLeadExpect toMsg =
 
 taskDecoder : D.Decoder Task
 taskDecoder =
-    D.map Task (D.field "id" D.string)
+    D.succeed Task
+        |> andMap (optString "_revision")
+        |> andMap (D.oneOf [ D.field "_editable" D.bool, D.succeed False ])
+        |> andMap (D.field "id" D.string)
         |> andMap (D.field "title" D.string)
         |> andMap (optString "description")
         |> andMap (D.oneOf [ D.field "status" D.string, D.succeed "todo" ])
@@ -3062,7 +3089,7 @@ updateContact : String -> String -> ContactForm -> (Result ApiError Contact -> m
 updateContact token id cf toMsg =
     Http.request
         { method = "PUT"
-        , headers =
+        , headers = Http.header "If-Match" cf.revision ::
             [ Http.header "Authorization" ("Bearer " ++ token)
             , Http.header "Content-Type" "application/json"
             ]
@@ -3074,11 +3101,11 @@ updateContact token id cf toMsg =
         }
 
 
-deleteContact : String -> String -> (Result String String -> msg) -> Cmd msg
-deleteContact token id toMsg =
+deleteContact : String -> String -> String -> (Result String String -> msg) -> Cmd msg
+deleteContact token id revision toMsg =
     Http.request
         { method = "DELETE"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = Http.header "If-Match" revision :: [ Http.header "Authorization" ("Bearer " ++ token) ]
         , url = "/api/contacts/" ++ id
         , body = Http.emptyBody
         , expect = deletedExpect toMsg
@@ -3116,11 +3143,11 @@ createActivity token contactId af toMsg =
         }
 
 
-deleteActivity : String -> String -> (Result String String -> msg) -> Cmd msg
-deleteActivity token id toMsg =
+deleteActivity : String -> String -> String -> (Result String String -> msg) -> Cmd msg
+deleteActivity token id revision toMsg =
     Http.request
         { method = "DELETE"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = Http.header "If-Match" revision :: [ Http.header "Authorization" ("Bearer " ++ token) ]
         , url = "/api/activities/" ++ id
         , body = Http.emptyBody
         , expect = deletedActivityExpect toMsg
@@ -3171,7 +3198,7 @@ updateDeal : String -> String -> DealForm -> (Result ApiError Deal -> msg) -> Cm
 updateDeal token id df toMsg =
     Http.request
         { method = "PUT"
-        , headers =
+        , headers = Http.header "If-Match" df.revision ::
             [ Http.header "Authorization" ("Bearer " ++ token)
             , Http.header "Content-Type" "application/json"
             ]
@@ -3183,8 +3210,8 @@ updateDeal token id df toMsg =
         }
 
 
-updateDealStage : String -> String -> String -> (Result ApiError Deal -> msg) -> Cmd msg
-updateDealStage token id newStage toMsg =
+updateDealStage : String -> String -> String -> String -> (Result ApiError Deal -> msg) -> Cmd msg
+updateDealStage token id revision newStage toMsg =
     Http.request
         { method = "PATCH"
         , headers =
@@ -3199,11 +3226,11 @@ updateDealStage token id newStage toMsg =
         }
 
 
-deleteDeal : String -> String -> (Result String String -> msg) -> Cmd msg
-deleteDeal token id toMsg =
+deleteDeal : String -> String -> String -> (Result String String -> msg) -> Cmd msg
+deleteDeal token id revision toMsg =
     Http.request
         { method = "DELETE"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = Http.header "If-Match" revision :: [ Http.header "Authorization" ("Bearer " ++ token) ]
         , url = "/api/deals/" ++ id
         , body = Http.emptyBody
         , expect = deletedDealExpect toMsg
@@ -3253,7 +3280,7 @@ updateSchool : String -> String -> SchoolForm -> (Result ApiError School -> msg)
 updateSchool token id sf toMsg =
     Http.request
         { method = "PUT"
-        , headers =
+        , headers = Http.header "If-Match" sf.revision ::
             [ Http.header "Authorization" ("Bearer " ++ token)
             , Http.header "Content-Type" "application/json"
             ]
@@ -3265,11 +3292,11 @@ updateSchool token id sf toMsg =
         }
 
 
-deleteSchool : String -> String -> (Result String String -> msg) -> Cmd msg
-deleteSchool token id toMsg =
+deleteSchool : String -> String -> String -> (Result String String -> msg) -> Cmd msg
+deleteSchool token id revision toMsg =
     Http.request
         { method = "DELETE"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = Http.header "If-Match" revision :: [ Http.header "Authorization" ("Bearer " ++ token) ]
         , url = "/api/schools/" ++ id
         , body = Http.emptyBody
         , expect = deletedSchoolExpect toMsg
@@ -3336,7 +3363,7 @@ updateStudent : String -> String -> StudentForm -> (Result ApiError Student -> m
 updateStudent token id sf toMsg =
     Http.request
         { method = "PUT"
-        , headers =
+        , headers = Http.header "If-Match" sf.revision ::
             [ Http.header "Authorization" ("Bearer " ++ token)
             , Http.header "Content-Type" "application/json"
             ]
@@ -3348,11 +3375,11 @@ updateStudent token id sf toMsg =
         }
 
 
-deleteStudent : String -> String -> (Result String String -> msg) -> Cmd msg
-deleteStudent token id toMsg =
+deleteStudent : String -> String -> String -> (Result String String -> msg) -> Cmd msg
+deleteStudent token id revision toMsg =
     Http.request
         { method = "DELETE"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = Http.header "If-Match" revision :: [ Http.header "Authorization" ("Bearer " ++ token) ]
         , url = "/api/students/" ++ id
         , body = Http.emptyBody
         , expect = deletedStudentExpect toMsg
@@ -3402,7 +3429,7 @@ updateAgent : String -> String -> AgentForm -> (Result ApiError Agent -> msg) ->
 updateAgent token id af toMsg =
     Http.request
         { method = "PUT"
-        , headers =
+        , headers = Http.header "If-Match" af.revision ::
             [ Http.header "Authorization" ("Bearer " ++ token)
             , Http.header "Content-Type" "application/json"
             ]
@@ -3414,11 +3441,11 @@ updateAgent token id af toMsg =
         }
 
 
-deleteAgent : String -> String -> (Result String String -> msg) -> Cmd msg
-deleteAgent token id toMsg =
+deleteAgent : String -> String -> String -> (Result String String -> msg) -> Cmd msg
+deleteAgent token id revision toMsg =
     Http.request
         { method = "DELETE"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = Http.header "If-Match" revision :: [ Http.header "Authorization" ("Bearer " ++ token) ]
         , url = "/api/agents/" ++ id
         , body = Http.emptyBody
         , expect = deletedAgentExpect toMsg
@@ -3468,7 +3495,7 @@ updateLead : String -> String -> LeadForm -> (Result ApiError Lead -> msg) -> Cm
 updateLead token id lf toMsg =
     Http.request
         { method = "PUT"
-        , headers =
+        , headers = Http.header "If-Match" lf.revision ::
             [ Http.header "Authorization" ("Bearer " ++ token)
             , Http.header "Content-Type" "application/json"
             ]
@@ -3480,11 +3507,11 @@ updateLead token id lf toMsg =
         }
 
 
-deleteLead : String -> String -> (Result String String -> msg) -> Cmd msg
-deleteLead token id toMsg =
+deleteLead : String -> String -> String -> (Result String String -> msg) -> Cmd msg
+deleteLead token id revision toMsg =
     Http.request
         { method = "DELETE"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = Http.header "If-Match" revision :: [ Http.header "Authorization" ("Bearer " ++ token) ]
         , url = "/api/leads/" ++ id
         , body = Http.emptyBody
         , expect = deletedLeadExpect toMsg
@@ -3599,7 +3626,7 @@ updateTask : String -> String -> TaskForm -> (Result ApiError Task -> msg) -> Cm
 updateTask token id tf toMsg =
     Http.request
         { method = "PUT"
-        , headers =
+        , headers = Http.header "If-Match" tf.revision ::
             [ Http.header "Authorization" ("Bearer " ++ token)
             , Http.header "Content-Type" "application/json"
             ]
@@ -3611,8 +3638,8 @@ updateTask token id tf toMsg =
         }
 
 
-updateTaskStatus : String -> String -> String -> (Result ApiError Task -> msg) -> Cmd msg
-updateTaskStatus token id newStatus toMsg =
+updateTaskStatus : String -> String -> String -> String -> (Result ApiError Task -> msg) -> Cmd msg
+updateTaskStatus token id revision newStatus toMsg =
     Http.request
         { method = "PATCH"
         , headers =
@@ -3627,11 +3654,11 @@ updateTaskStatus token id newStatus toMsg =
         }
 
 
-deleteTask : String -> String -> (Result String String -> msg) -> Cmd msg
-deleteTask token id toMsg =
+deleteTask : String -> String -> String -> (Result String String -> msg) -> Cmd msg
+deleteTask token id revision toMsg =
     Http.request
         { method = "DELETE"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = Http.header "If-Match" revision :: [ Http.header "Authorization" ("Bearer " ++ token) ]
         , url = "/api/tasks/" ++ id
         , body = Http.emptyBody
         , expect = deletedTaskExpect toMsg
@@ -3644,8 +3671,8 @@ deleteTask token id toMsg =
 -- BULK / PARTIAL UPDATES --------------------------------------------------
 
 
-updateDealStageOnly : String -> String -> String -> (Result ApiError Deal -> msg) -> Cmd msg
-updateDealStageOnly token id newStage toMsg =
+updateDealStageOnly : String -> String -> String -> String -> (Result ApiError Deal -> msg) -> Cmd msg
+updateDealStageOnly token id revision newStage toMsg =
     Http.request
         { method = "PATCH"
         , headers =
@@ -3660,11 +3687,11 @@ updateDealStageOnly token id newStage toMsg =
         }
 
 
-deleteDealRaw : String -> String -> (Result String String -> msg) -> Cmd msg
-deleteDealRaw token id toMsg =
+deleteDealRaw : String -> String -> String -> (Result String String -> msg) -> Cmd msg
+deleteDealRaw token id revision toMsg =
     Http.request
         { method = "DELETE"
-        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , headers = Http.header "If-Match" revision :: [ Http.header "Authorization" ("Bearer " ++ token) ]
         , url = "/api/deals/" ++ id
         , body = Http.emptyBody
         , expect = deletedDealExpect toMsg
@@ -3805,26 +3832,26 @@ fetchWorkspaceClock token toMsg =
     workspaceGet token "/api/clock" (D.map2 Tuple.pair (D.field "today" D.string) (D.field "unread" D.int)) toMsg
 
 
-bulkMoveDeals : String -> List String -> String -> (Result ApiError Deal -> msg) -> Cmd msg
-bulkMoveDeals token ids stage toMsg =
+bulkMoveDeals : String -> List String -> List ( String, String ) -> String -> (Result ApiError Deal -> msg) -> Cmd msg
+bulkMoveDeals token ids records stage toMsg =
     Http.request
         { method = "POST"
         , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
         , url = "/api/deals/bulk"
-        , body = Http.jsonBody (E.object [ ( "ids", E.list E.string ids ), ( "stage", E.string stage ) ])
+        , body = Http.jsonBody (E.object [ ( "ids", E.list E.string ids ), ( "revisions", E.object (List.map (\( id, revision ) -> ( id, E.string revision )) records) ), ( "stage", E.string stage ) ])
         , expect = savedDealExpect toMsg
         , timeout = Just 20000
         , tracker = Nothing
         }
 
 
-bulkDeleteDeals : String -> List String -> (Result String String -> msg) -> Cmd msg
-bulkDeleteDeals token ids toMsg =
+bulkDeleteDeals : String -> List String -> List ( String, String ) -> (Result String String -> msg) -> Cmd msg
+bulkDeleteDeals token ids records toMsg =
     Http.request
         { method = "POST"
         , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
         , url = "/api/deals/bulk"
-        , body = Http.jsonBody (E.object [ ( "ids", E.list E.string ids ), ( "delete", E.bool True ) ])
+        , body = Http.jsonBody (E.object [ ( "ids", E.list E.string ids ), ( "revisions", E.object (List.map (\( id, revision ) -> ( id, E.string revision )) records) ), ( "delete", E.bool True ) ])
         , expect = deletedDealExpect toMsg
         , timeout = Just 20000
         , tracker = Nothing

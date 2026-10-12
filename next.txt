@@ -1,0 +1,5 @@
+Disconnected from this task. Any running work continues.
+To reconnect, run:
+  codex resume 01a130da-1960-7d72-b35d-202341e95af4
+Stop the current turn: run codex agents, select this task, and press x.
+Token usage so far: total=667,338 input=529,043 (+ 34,672,512 cached) output=138,295 (reasoning 51,267)

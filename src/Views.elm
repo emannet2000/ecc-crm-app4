@@ -3,6 +3,7 @@ module Views exposing (view)
 {-| Root view: routing between pages and app shell.
 -}
 
+import Dict
 import Html exposing (..)
 import Html.Attributes as Attr exposing (class)
 import Html.Events
@@ -38,22 +39,55 @@ recordTools route =
             Html.node "crm-record-tools" [ Attr.id "record-tools", Attr.attribute "entity" entity, Attr.attribute "record-id" id ] []
     in
     case route of
-        ContactDetail id -> record "contacts" id
+        ContactDetail _ -> text ""
         DealDetail id -> record "deals" id
         SchoolDetail id -> record "schools" id
-        StudentDetail id -> record "students" id
+        StudentDetail _ -> text ""
         AgentDetail id -> record "agents" id
-        LeadDetail id -> record "leads" id
-        CaseDetail id -> record "cases" id
+        LeadDetail _ -> text ""
+        CaseDetail _ -> text ""
         InvoiceDetail id -> record "invoices" id
         PartnerDetail id -> record "partners" id
         _ -> text ""
 
 
+clientWorkspace : Route -> Html Msg
+clientWorkspace route =
+    let
+        workspace entity id = Html.node "crm-client-workspace" [ Attr.id "record-tools", Attr.attribute "entity" entity, Attr.attribute "record-id" id ] []
+    in
+    case route of
+        ContactDetail id -> workspace "contacts" id
+        LeadDetail id -> workspace "leads" id
+        StudentDetail id -> workspace "students" id
+        CaseDetail id -> workspace "cases" id
+        _ -> text ""
+
+
+recordPage : Route -> Html Msg -> Html Msg
+recordPage route content =
+    case route of
+        ContactDetail id -> recordDetails "contacts" id content
+        LeadDetail id -> recordDetails "leads" id content
+        StudentDetail id -> recordDetails "students" id content
+        CaseDetail id -> recordDetails "cases" id content
+        _ -> content
+
+
+recordDetails : String -> String -> Html Msg -> Html Msg
+recordDetails entity id content =
+    Html.details [ class "client-record-details", Attr.id "record-details" ]
+        [ Html.summary [] [ text "Client details and additional tools" ]
+        , content
+        , Html.node "crm-record-tools" [ Attr.id "advanced-record-tools", Attr.attribute "entity" entity, Attr.attribute "record-id" id, Attr.attribute "lazy" "true" ] []
+        ]
+
+
 pageContent : Model -> User -> Html Msg
 pageContent model user =
     div [ class "content__body" ]
-        [ case model.route of
+        [ clientWorkspace model.route
+        , recordPage model.route (case model.route of
             Home ->
                 homeView model user
 
@@ -186,6 +220,7 @@ pageContent model user =
                     Nothing ->
                         div [ class "content__empty-block" ]
                             [ text "Partner not found." ]
+          )
         , case model.contactForm of
             Just cf ->
                 contactFormModal model cf
@@ -211,7 +246,7 @@ pageContent model user =
             Nothing ->
                 text ""
         , if model.bulkDeleteConfirm then
-            bulkDeleteConfirmModal (Set.size model.selectedDeals)
+            bulkDeleteConfirmModal (Dict.size model.bulkDealRevisions)
 
           else
             text ""
@@ -223,7 +258,7 @@ pageContent model user =
                 text ""
         , case model.activityForm of
             Just af ->
-                activityFormModal af
+                activityFormModal model af
 
             Nothing ->
                 text ""
@@ -407,7 +442,13 @@ appShell model user =
         , div [ class "app-main" ]
             [ topbar model user
             , main_ [ class "content", Attr.id "workspace-content" ]
-                [ div [ class "content__header" ]
+                [ div [ class ("content__header" ++ (case model.route of
+                            Chat -> " client-page-heading"
+                            ContactDetail _ -> " client-page-heading"
+                            LeadDetail _ -> " client-page-heading"
+                            StudentDetail _ -> " client-page-heading"
+                            CaseDetail _ -> " client-page-heading"
+                            _ -> "")) ]
                     [ h1 [ class "content__title" ]
                         [ text (pageTitle model) ]
                     , p [ class "content__description" ] [ text (pageDescription model) ]

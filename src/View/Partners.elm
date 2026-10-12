@@ -3,6 +3,8 @@ module View.Partners exposing (deletePartnerConfirmModal, partnerDetailView, par
 {-| Partners: list, detail, form.
 -}
 
+import View.Drafts
+import Update.Access
 import Html exposing (..)
 import Html.Attributes as Attr exposing (class, disabled, for, id, placeholder, type_, value)
 import Html.Events exposing (onClick, onInput, onSubmit)
@@ -48,6 +50,7 @@ partnerRow partner =
                 [ class "row-action"
                 , type_ "button"
                 , Attr.title "Edit"
+                , Attr.disabled (not partner.editable)
                 , Html.Events.stopPropagationOn "click"
                     (D.succeed ( OpenedEditPartner partner, True ))
                 ]
@@ -56,6 +59,7 @@ partnerRow partner =
                 [ class "row-action row-action--danger"
                 , type_ "button"
                 , Attr.title "Delete"
+                , Attr.disabled (not partner.editable)
                 , Html.Events.stopPropagationOn "click"
                     (D.succeed ( RequestedDeletePartner partner, True ))
                 ]
@@ -115,6 +119,7 @@ partnersView model =
                     , button
                         [ class "ecc-btn ecc-btn--inline"
                         , type_ "button"
+                        , Attr.disabled (not (Update.Access.canCreate model))
                         , onClick OpenedAddPartner
                         ]
                         [ text "Add partner" ]
@@ -217,7 +222,8 @@ partnerDetailView _ partner =
                 [ button
                     [ class "ecc-btn ecc-btn--ghost ecc-btn--inline"
                     , type_ "button"
-                    , onClick (OpenedEditPartner partner)
+                    , Attr.disabled (not partner.editable)
+            , onClick (OpenedEditPartner partner)
                     ]
                     [ iconEdit
                     , span [] [ text "Edit" ]
@@ -225,7 +231,8 @@ partnerDetailView _ partner =
                 , button
                     [ class "ecc-btn ecc-btn--danger ecc-btn--inline"
                     , type_ "button"
-                    , onClick (RequestedDeletePartner partner)
+                    , Attr.disabled (not partner.editable)
+            , onClick (RequestedDeletePartner partner)
                     ]
                     [ iconTrash
                     , span [] [ text "Delete" ]
@@ -412,8 +419,8 @@ partnerTypePills pf =
         ]
 
 
-partnerFormView : PartnerForm -> Bool -> Html Msg
-partnerFormView pf isEdit =
+partnerFormView : Model -> PartnerForm -> Bool -> Html Msg
+partnerFormView model pf isEdit =
     let
         formError =
             partnerFormFieldError "form" pf
@@ -429,7 +436,7 @@ partnerFormView pf isEdit =
                 "Save partner"
     in
     form [ onSubmit SubmittedPartnerForm, Attr.novalidate True ]
-        [ Html.node "crm-draft-recovery" [] []
+        [ View.Drafts.view model
         , case formError of
             Just msg ->
                 div [ class "ecc-alert ecc-alert--error" ] [ text msg ]
@@ -560,7 +567,7 @@ partnerFormModal model pf =
                     ]
 
               else
-                partnerFormView pf isEdit
+                partnerFormView model pf isEdit
             ]
         ]
 

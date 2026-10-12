@@ -3,6 +3,11 @@
 Elm frontend and Go API for contacts, deals, activities, tasks, schools,
 students, agents, leads, cases, document tracking, invoices, payments, and partners.
 
+Client records now open a [unified client workspace](docs/CLIENT_WORKSPACE.md) with
+inline linked-record editing, next actions, files, communication, payments and history.
+Phone sign-in uses a compact layout and comfortable controls. Elm owns form drafts,
+revision tokens and record capabilities, including recovery during background refresh.
+
 ## Features
 
 - Conversational **Ask ECC AI** adviser throughout the workspace: ask follow-up

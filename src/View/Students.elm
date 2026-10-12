@@ -3,6 +3,8 @@ module View.Students exposing (deleteStudentConfirmModal, linkedStudentsView, st
 {-| Students: list, detail (with case/documents/invoice dossier), form.
 -}
 
+import View.Drafts
+import Update.Access
 import Html exposing (..)
 import Html.Attributes as Attr exposing (class, disabled, for, id, placeholder, type_, value)
 import Html.Events exposing (onClick, onInput, onSubmit)
@@ -185,6 +187,7 @@ studentRow s =
                 , type_ "button"
                 , Attr.title "Edit"
                 , Attr.attribute "aria-label" ("Edit " ++ s.name)
+                , Attr.disabled (not s.editable)
                 , Html.Events.stopPropagationOn "click"
                     (D.succeed ( OpenedEditStudent s, True ))
                 ]
@@ -194,6 +197,7 @@ studentRow s =
                 , type_ "button"
                 , Attr.title "Delete"
                 , Attr.attribute "aria-label" ("Delete " ++ s.name)
+                , Attr.disabled (not s.editable)
                 , Html.Events.stopPropagationOn "click"
                     (D.succeed ( RequestedDeleteStudent s, True ))
                 ]
@@ -323,6 +327,7 @@ studentsView model =
                     , button
                         [ class "ecc-btn ecc-btn--inline"
                         , type_ "button"
+                        , Attr.disabled (not (Update.Access.canCreate model))
                         , onClick OpenedAddStudent
                         ]
                         [ text "Add student" ]
@@ -352,7 +357,8 @@ studentsView model =
                                 [ button
                                     [ class "ecc-btn ecc-btn--inline"
                                     , type_ "button"
-                                    , onClick OpenedAddStudent
+                                    , Attr.disabled (not (Update.Access.canCreate model))
+                        , onClick OpenedAddStudent
                                     ]
                                     [ text "Add your first student" ]
                                 ]
@@ -583,7 +589,8 @@ studentDetailView model s =
                 [ button
                     [ class "ecc-btn ecc-btn--ghost ecc-btn--inline"
                     , type_ "button"
-                    , onClick (OpenedEditStudent s)
+                    , Attr.disabled (not s.editable)
+            , onClick (OpenedEditStudent s)
                     ]
                     [ iconEdit
                     , span [] [ text "Edit" ]
@@ -591,7 +598,8 @@ studentDetailView model s =
                 , button
                     [ class "ecc-btn ecc-btn--danger ecc-btn--inline"
                     , type_ "button"
-                    , onClick (RequestedDeleteStudent s)
+                    , Attr.disabled (not s.editable)
+            , onClick (RequestedDeleteStudent s)
                     ]
                     [ iconTrash
                     , span [] [ text "Delete" ]
@@ -648,7 +656,8 @@ studentDetailView model s =
                         (button
                             [ class "detail-card__action"
                             , type_ "button"
-                            , onClick (OpenedAddCaseForStudent s)
+                            , Attr.disabled (not (Update.Access.canCreate model))
+                        , onClick (OpenedAddCaseForStudent s)
                             ]
                             [ text "New application" ]
                         )
@@ -867,7 +876,7 @@ studentFormView model sf isEdit =
                 "Save student"
     in
     form [ onSubmit SubmittedStudentForm, Attr.novalidate True ]
-        [ Html.node "crm-draft-recovery" [] []
+        [ View.Drafts.view model
         , case formError of
             Just msg ->
                 div [ class "ecc-alert ecc-alert--error" ] [ text msg ]

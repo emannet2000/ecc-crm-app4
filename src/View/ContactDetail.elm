@@ -3,6 +3,7 @@ module View.ContactDetail exposing (contactDetailView)
 {-| Contact detail page.
 -}
 
+import Update.Access
 import Html exposing (..)
 import Html.Attributes as Attr exposing (class, type_)
 import Html.Events exposing (onClick)
@@ -259,7 +260,8 @@ contactDetailView model c =
                 [ button
                     [ class "ecc-btn ecc-btn--ghost ecc-btn--inline"
                     , type_ "button"
-                    , onClick (OpenedEditContact c)
+                    , Attr.disabled (not c.editable)
+            , onClick (OpenedEditContact c)
                     ]
                     [ iconEdit
                     , span [] [ text "Edit" ]
@@ -267,7 +269,8 @@ contactDetailView model c =
                 , button
                     [ class "ecc-btn ecc-btn--danger ecc-btn--inline"
                     , type_ "button"
-                    , onClick (RequestedDeleteContact c)
+                    , Attr.disabled (not c.editable)
+            , onClick (RequestedDeleteContact c)
                     ]
                     [ iconTrash
                     , span [] [ text "Delete" ]
@@ -323,6 +326,7 @@ contactDetailView model c =
                         (button
                             [ class "detail-card__action"
                             , type_ "button"
+                            , Attr.disabled (not c.editable)
                             , onClick OpenedActivityForm
                             ]
                             [ text "Log activity" ]
@@ -334,7 +338,8 @@ contactDetailView model c =
                         (button
                             [ class "detail-card__action"
                             , type_ "button"
-                            , onClick (OpenedAddDealForContact c)
+                            , Attr.disabled (not (Update.Access.canCreate model))
+                        , onClick (OpenedAddDealForContact c)
                             ]
                             [ text "New deal" ]
                         )
@@ -354,7 +359,8 @@ contactDetailView model c =
                         (button
                             [ class "detail-card__action"
                             , type_ "button"
-                            , onClick (OpenedAddTaskForContact c)
+                            , Attr.disabled (not (Update.Access.canCreate model))
+                        , onClick (OpenedAddTaskForContact c)
                             ]
                             [ text "New task" ]
                         )

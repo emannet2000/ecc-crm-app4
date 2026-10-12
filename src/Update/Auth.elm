@@ -4,6 +4,7 @@ module Update.Auth exposing (update)
 -}
 
 import Api
+import Dict
 import Ports exposing (storeToken)
 import Set
 import Types exposing (..)
@@ -156,7 +157,8 @@ update msg model =
 
                 Err _ ->
                     ( { model
-                        | token = Nothing
+                        | workspaceEditRequest = Nothing
+                        , token = Nothing
                         , user = Nothing
                         , bootstrapping = False
                       }
@@ -165,7 +167,8 @@ update msg model =
 
         LoggedOut ->
             ( { model
-                | token = Nothing
+                | workspaceEditRequest = Nothing
+                , token = Nothing
                 , user = Nothing
                 , form = emptyForm
                 , mode = Login
@@ -185,6 +188,8 @@ update msg model =
                 , toast = Nothing
                 , bootstrapping = False
                 , deals = NotAsked
+                , dealsRefreshing = False
+                , dealStageFilter = ""
                 , viewingDeal = Nothing
                 , dealForm = Nothing
                 , editingDealId = Nothing
@@ -196,6 +201,7 @@ update msg model =
                 , ownerFilter = ""
                 , dateFromFilter = ""
                 , dateToFilter = ""
+                , bulkDealRevisions = Dict.empty
                 , bulkMoveStage = Nothing
                 , bulkDeleteConfirm = False
                 , activities = NotAsked

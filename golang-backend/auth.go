@@ -72,7 +72,11 @@ const (
 )
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {
-	payload = withRecordVersions(payload)
+	var user *User
+	if writer, ok := w.(interface{ recordUser() *User }); ok {
+		user = writer.recordUser()
+	}
+	payload = withRecordVersionsFor(payload, user)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	json.NewEncoder(w).Encode(payload)

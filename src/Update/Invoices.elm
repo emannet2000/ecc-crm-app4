@@ -259,7 +259,7 @@ update msg model =
         ConfirmedDeleteInvoice ->
             case ( model.deletingInvoice, model.token ) of
                 ( Just inv, Just token ) ->
-                    ( model, Api.deleteInvoice token inv.id GotDeletedInvoice )
+                    ( model, Api.deleteInvoice token inv.id inv.revision GotDeletedInvoice )
 
                 _ ->
                     ( model, Cmd.none )
@@ -435,7 +435,7 @@ update msg model =
         ConfirmedDeletePayment ->
             case ( model.deletingPayment, model.token ) of
                 ( Just p, Just token ) ->
-                    ( model, Api.deletePayment token p.id GotDeletedPayment )
+                    ( model, Api.deletePayment token p.id p.revision GotDeletedPayment )
 
                 _ ->
                     ( model, Cmd.none )
@@ -467,7 +467,7 @@ update msg model =
             case ( model.refundConfirmInvoice, model.token ) of
                 ( Just inv, Just token ) ->
                     ( { model | refundConfirmInvoice = Nothing }
-                    , Api.refundInvoice token inv.id "Refund requested via UI" GotRefunded
+                    , Api.refundInvoice token inv.id inv.revision "Refund requested via UI" GotRefunded
                     )
 
                 _ ->

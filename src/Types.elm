@@ -2,6 +2,7 @@ module Types exposing (..)
 
 import Browser
 import Dict exposing (Dict)
+import Json.Encode as E
 import Browser.Navigation as Nav
 import Set exposing (Set)
 import Url
@@ -60,7 +61,9 @@ type alias User =
 
 
 type alias Contact =
-    { id : String
+    { revision : String
+    , editable : Bool
+    , id : String
     , name : String
     , email : String
     , company : String
@@ -93,7 +96,8 @@ type alias ContactsData =
 
 
 type alias ContactForm =
-    { name : String
+    { revision : String
+    , name : String
     , email : String
     , company : String
     , title : String
@@ -112,7 +116,8 @@ type alias ContactForm =
 
 emptyContactForm : ContactForm
 emptyContactForm =
-    { name = ""
+    { revision = ""
+    , name = ""
     , email = ""
     , company = ""
     , title = ""
@@ -131,7 +136,8 @@ emptyContactForm =
 
 contactToForm : Contact -> ContactForm
 contactToForm c =
-    { name = c.name
+    { revision = c.revision
+    , name = c.name
     , email = c.email
     , company = c.company
     , title = c.title
@@ -149,7 +155,9 @@ contactToForm c =
 
 
 type alias Deal =
-    { id : String
+    { revision : String
+    , editable : Bool
+    , id : String
     , title : String
     , contactId : String
     , contactName : String
@@ -202,7 +210,8 @@ emptyDealsData query =
 
 
 type alias DealForm =
-    { title : String
+    { revision : String
+    , title : String
     , contactId : String
     , value : String
     , currency : String
@@ -219,7 +228,8 @@ type alias DealForm =
 
 emptyDealForm : DealForm
 emptyDealForm =
-    { title = ""
+    { revision = ""
+    , title = ""
     , contactId = ""
     , value = ""
     , currency = "USD"
@@ -236,7 +246,8 @@ emptyDealForm =
 
 dealToForm : Deal -> DealForm
 dealToForm d =
-    { title = d.title
+    { revision = d.revision
+    , title = d.title
     , contactId = d.contactId
     , value = String.fromFloat d.value
     , currency = d.currency
@@ -252,7 +263,9 @@ dealToForm d =
 
 
 type alias Activity =
-    { id : String
+    { revision : String
+    , editable : Bool
+    , id : String
     , contactId : String
     , dealId : String
     , kind : String
@@ -265,7 +278,9 @@ type alias Activity =
 
 
 type alias Task =
-    { id : String
+    { revision : String
+    , editable : Bool
+    , id : String
     , title : String
     , description : String
     , status : String
@@ -286,7 +301,8 @@ type alias TasksData =
 
 
 type alias TaskForm =
-    { title : String
+    { revision : String
+    , title : String
     , description : String
     , status : String
     , dueDate : String
@@ -301,7 +317,8 @@ type alias TaskForm =
 
 emptyTaskForm : TaskForm
 emptyTaskForm =
-    { title = ""
+    { revision = ""
+    , title = ""
     , description = ""
     , status = "todo"
     , dueDate = ""
@@ -316,7 +333,8 @@ emptyTaskForm =
 
 taskToForm : Task -> TaskForm
 taskToForm task =
-    { title = task.title
+    { revision = task.revision
+    , title = task.title
     , description = task.description
     , status = task.status
     , dueDate = task.dueDate
@@ -451,7 +469,9 @@ type Field
 
 
 type alias School =
-    { id : String
+    { revision : String
+    , editable : Bool
+    , id : String
     , name : String
     , countryCode : String
     , commissionRate : String
@@ -475,7 +495,8 @@ type alias SchoolsData =
 
 
 type alias SchoolForm =
-    { name : String
+    { revision : String
+    , name : String
     , countryCode : String
     , commissionRate : String
     , contractStatus : String
@@ -492,7 +513,8 @@ type alias SchoolForm =
 
 emptySchoolForm : SchoolForm
 emptySchoolForm =
-    { name = ""
+    { revision = ""
+    , name = ""
     , countryCode = ""
     , commissionRate = ""
     , contractStatus = "Pending"
@@ -509,7 +531,8 @@ emptySchoolForm =
 
 schoolToForm : School -> SchoolForm
 schoolToForm s =
-    { name = s.name
+    { revision = s.revision
+    , name = s.name
     , countryCode = s.countryCode
     , commissionRate = s.commissionRate
     , contractStatus = s.contractStatus
@@ -529,7 +552,9 @@ schoolToForm s =
 
 
 type alias Student =
-    { id : String
+    { revision : String
+    , editable : Bool
+    , id : String
     , name : String
     , studentCode : String
     , countryCode : String
@@ -564,7 +589,8 @@ type alias LinkedStudentsData =
 
 
 type alias StudentForm =
-    { name : String
+    { revision : String
+    , name : String
     , studentCode : String
     , countryCode : String
     , schoolId : String
@@ -583,7 +609,8 @@ type alias StudentForm =
 
 emptyStudentForm : StudentForm
 emptyStudentForm =
-    { name = ""
+    { revision = ""
+    , name = ""
     , studentCode = ""
     , countryCode = ""
     , schoolId = ""
@@ -602,7 +629,8 @@ emptyStudentForm =
 
 studentToForm : Student -> StudentForm
 studentToForm s =
-    { name = s.name
+    { revision = s.revision
+    , name = s.name
     , studentCode = s.studentCode
     , countryCode = s.countryCode
     , schoolId = s.schoolId
@@ -639,7 +667,9 @@ invoiceStatuses =
 
 
 type alias Agent =
-    { id : String
+    { revision : String
+    , editable : Bool
+    , id : String
     , name : String
     , agentCode : String
     , countryCode : String
@@ -662,7 +692,8 @@ type alias AgentsData =
 
 
 type alias AgentForm =
-    { name : String
+    { revision : String
+    , name : String
     , agentCode : String
     , countryCode : String
     , contractStatus : String
@@ -678,7 +709,8 @@ type alias AgentForm =
 
 emptyAgentForm : AgentForm
 emptyAgentForm =
-    { name = ""
+    { revision = ""
+    , name = ""
     , agentCode = ""
     , countryCode = ""
     , contractStatus = "Pending"
@@ -694,7 +726,8 @@ emptyAgentForm =
 
 agentToForm : Agent -> AgentForm
 agentToForm a =
-    { name = a.name
+    { revision = a.revision
+    , name = a.name
     , agentCode = a.agentCode
     , countryCode = a.countryCode
     , contractStatus = a.contractStatus
@@ -723,7 +756,9 @@ agentStatuses =
 
 
 type alias Lead =
-    { id : String
+    { revision : String
+    , editable : Bool
+    , id : String
     , leadNumber : String
     , name : String
     , email : String
@@ -754,7 +789,8 @@ type alias LeadsData =
 
 
 type alias LeadForm =
-    { leadNumber : String
+    { revision : String
+    , leadNumber : String
     , name : String
     , email : String
     , phone : String
@@ -779,7 +815,8 @@ type alias LeadForm =
 
 emptyLeadForm : LeadForm
 emptyLeadForm =
-    { leadNumber = ""
+    { revision = ""
+    , leadNumber = ""
     , name = ""
     , email = ""
     , phone = ""
@@ -804,7 +841,8 @@ emptyLeadForm =
 
 leadToForm : Lead -> LeadForm
 leadToForm l =
-    { leadNumber = l.leadNumber
+    { revision = l.revision
+    , leadNumber = l.leadNumber
     , name = l.name
     , email = l.email
     , phone = l.phone
@@ -858,7 +896,9 @@ leadStatuses =
 
 
 type alias Case =
-    { id : String
+    { revision : String
+    , editable : Bool
+    , id : String
     , caseNumber : String
     , clientId : String
     , clientName : String
@@ -897,7 +937,8 @@ type alias CasesData =
 
 
 type alias CaseForm =
-    { caseNumber : String
+    { revision : String
+    , caseNumber : String
     , clientId : String
     , studentId : String
     , serviceCategory : String
@@ -926,7 +967,8 @@ type alias CaseForm =
 
 emptyCaseForm : CaseForm
 emptyCaseForm =
-    { caseNumber = ""
+    { revision = ""
+    , caseNumber = ""
     , clientId = ""
     , studentId = ""
     , serviceCategory = ""
@@ -955,7 +997,8 @@ emptyCaseForm =
 
 caseToForm : Case -> CaseForm
 caseToForm c =
-    { caseNumber = c.caseNumber
+    { revision = c.revision
+    , caseNumber = c.caseNumber
     , clientId = c.clientId
     , studentId = c.studentId
     , serviceCategory = c.serviceCategory
@@ -1015,7 +1058,9 @@ casePriorities =
 
 
 type alias Document =
-    { id : String
+    { revision : String
+    , editable : Bool
+    , id : String
     , caseId : String
     , caseNumber : String
     , docName : String
@@ -1038,7 +1083,8 @@ type alias Document =
 
 
 type alias DocumentForm =
-    { docName : String
+    { revision : String
+    , docName : String
     , required : Bool
     , dateRequested : String
     , dateReceived : String
@@ -1060,7 +1106,8 @@ type alias DocumentForm =
 
 emptyDocumentForm : DocumentForm
 emptyDocumentForm =
-    { docName = ""
+    { revision = ""
+    , docName = ""
     , required = True
     , dateRequested = ""
     , dateReceived = ""
@@ -1082,7 +1129,8 @@ emptyDocumentForm =
 
 documentToForm : Document -> DocumentForm
 documentToForm d =
-    { docName = d.docName
+    { revision = d.revision
+    , docName = d.docName
     , required = d.required
     , dateRequested = d.dateRequested
     , dateReceived = d.dateReceived
@@ -1119,7 +1167,9 @@ documentStatuses =
 
 
 type alias Invoice =
-    { currency : String
+    { revision : String
+    , editable : Bool
+    , currency : String
     , id : String
     , invoiceNumber : String
     , clientId : String
@@ -1154,7 +1204,8 @@ type alias InvoicesData =
 
 
 type alias InvoiceForm =
-    { invoiceNumber : String
+    { revision : String
+    , invoiceNumber : String
     , clientId : String
     , caseId : String
     , totalFee : String
@@ -1178,7 +1229,8 @@ type alias InvoiceForm =
 
 emptyInvoiceForm : InvoiceForm
 emptyInvoiceForm =
-    { invoiceNumber = ""
+    { revision = ""
+    , invoiceNumber = ""
     , clientId = ""
     , caseId = ""
     , totalFee = "0"
@@ -1202,7 +1254,8 @@ emptyInvoiceForm =
 
 invoiceToForm : Invoice -> InvoiceForm
 invoiceToForm inv =
-    { invoiceNumber = inv.invoiceNumber
+    { revision = inv.revision
+    , invoiceNumber = inv.invoiceNumber
     , clientId = inv.clientId
     , caseId = inv.caseId
     , totalFee = String.fromFloat inv.totalFee
@@ -1241,7 +1294,9 @@ paymentMilestones =
 
 
 type alias Payment =
-    { currency : String
+    { revision : String
+    , editable : Bool
+    , currency : String
     , id : String
     , invoiceId : String
     , amount : Float
@@ -1288,7 +1343,9 @@ emptyPaymentForm =
 
 
 type alias Partner =
-    { id : String
+    { revision : String
+    , editable : Bool
+    , id : String
     , type_ : String
     , legalCompanyName : String
     , country : String
@@ -1325,7 +1382,8 @@ type alias PartnersData =
 
 
 type alias PartnerForm =
-    { type_ : String
+    { revision : String
+    , type_ : String
     , legalCompanyName : String
     , country : String
     , licenseNumber : String
@@ -1353,7 +1411,8 @@ type alias PartnerForm =
 
 emptyPartnerForm : PartnerForm
 emptyPartnerForm =
-    { type_ = "School"
+    { revision = ""
+    , type_ = "School"
     , legalCompanyName = ""
     , country = ""
     , licenseNumber = ""
@@ -1381,7 +1440,8 @@ emptyPartnerForm =
 
 partnerToForm : Partner -> PartnerForm
 partnerToForm p =
-    { type_ = p.type_
+    { revision = p.revision
+    , type_ = p.type_
     , legalCompanyName = p.legalCompanyName
     , country = p.country
     , licenseNumber = p.licenseNumber
@@ -1518,6 +1578,7 @@ type alias Model =
     , dateToFilter : String
     , unreadNotifications : Int
     , today : String
+    , bulkDealRevisions : Dict String String
     , bulkMoveStage : Maybe String
     , bulkDeleteConfirm : Bool
     , activities : RemoteData (List Activity)
@@ -1529,6 +1590,8 @@ type alias Model =
     , editingTaskId : Maybe String
     , deletingTask : Maybe Task
     , pendingContactsQuery : Maybe String
+    , dealsRefreshing : Bool
+    , dealStageFilter : String
     , dealsRequestId : Int
     , pendingDealsQuery : Maybe String
     , pendingTasksQuery : Maybe String
@@ -1588,6 +1651,8 @@ type alias Model =
     , deletingPartner : Maybe Partner
     , pendingPartnersQuery : Maybe String
     , sidebarOpen : Bool
+    , workspaceEditRequest : Maybe ( String, String )
+    , draftRecovery : Maybe DraftRecovery
     , navKey : Nav.Key
     }
 
@@ -1606,8 +1671,33 @@ emptyForm =
 -- ========== MSG ==========
 
 
+type alias DraftRecovery =
+    { key : String
+    , entity : String
+    , recordId : String
+    , fields : E.Value
+    , current : E.Value
+    , restored : Bool
+    , reviewing : Bool
+    , reviewed : Bool
+    , useLatest : Bool
+    , error : Maybe String
+    }
+
+
 type Msg
     = UpdatedField Field String
+    | RefreshRecords
+    | RequestedWorkspaceApplication String String
+    | RequestedWorkspaceInvoice String String
+    | RequestedWorkspaceEdit String String
+    | GotWorkspaceEdit String String (Result String E.Value)
+    | GotStoredDraft E.Value
+    | RestoreDraft
+    | DiscardDraft
+    | ReviewLatestDraft
+    | GotLatestDraft String (Result String E.Value)
+    | UseLatestDraftRevision Bool
     | ToggledTheme
     | ToggledRemember Bool
     | ToggledShowPassword
@@ -1652,6 +1742,7 @@ type Msg
     | GotDeals (Result String DealsData)
     | GotDealsAt Int String Bool (Result String DealsData)
     | LoadMoreDeals
+    | UpdatedDealStageFilter String
     | RefreshDeals
     | OpenedAddDeal
     | OpenedAddDealForContact Contact

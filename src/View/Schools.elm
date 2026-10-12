@@ -3,6 +3,8 @@ module View.Schools exposing (deleteSchoolConfirmModal, schoolDetailView, school
 {-| Schools: list, detail, form.
 -}
 
+import View.Drafts
+import Update.Access
 import Html exposing (..)
 import Html.Attributes as Attr exposing (class, disabled, for, id, placeholder, type_, value)
 import Html.Events exposing (onClick, onInput, onSubmit)
@@ -65,6 +67,7 @@ schoolRow s =
                 , type_ "button"
                 , Attr.title "Edit"
                 , Attr.attribute "aria-label" ("Edit " ++ s.name)
+                , Attr.disabled (not s.editable)
                 , Html.Events.stopPropagationOn "click"
                     (D.succeed ( OpenedEditSchool s, True ))
                 ]
@@ -74,6 +77,7 @@ schoolRow s =
                 , type_ "button"
                 , Attr.title "Delete"
                 , Attr.attribute "aria-label" ("Delete " ++ s.name)
+                , Attr.disabled (not s.editable)
                 , Html.Events.stopPropagationOn "click"
                     (D.succeed ( RequestedDeleteSchool s, True ))
                 ]
@@ -154,6 +158,7 @@ schoolsView model =
                     , button
                         [ class "ecc-btn ecc-btn--inline"
                         , type_ "button"
+                        , Attr.disabled (not (Update.Access.canCreate model))
                         , onClick OpenedAddSchool
                         ]
                         [ text "Add school" ]
@@ -183,7 +188,8 @@ schoolsView model =
                                 [ button
                                     [ class "ecc-btn ecc-btn--inline"
                                     , type_ "button"
-                                    , onClick OpenedAddSchool
+                                    , Attr.disabled (not (Update.Access.canCreate model))
+                        , onClick OpenedAddSchool
                                     ]
                                     [ text "Add your first school" ]
                                 ]
@@ -272,7 +278,8 @@ schoolDetailView model s =
                 [ button
                     [ class "ecc-btn ecc-btn--ghost ecc-btn--inline"
                     , type_ "button"
-                    , onClick (OpenedEditSchool s)
+                    , Attr.disabled (not s.editable)
+            , onClick (OpenedEditSchool s)
                     ]
                     [ iconEdit
                     , span [] [ text "Edit" ]
@@ -280,7 +287,8 @@ schoolDetailView model s =
                 , button
                     [ class "ecc-btn ecc-btn--danger ecc-btn--inline"
                     , type_ "button"
-                    , onClick (RequestedDeleteSchool s)
+                    , Attr.disabled (not s.editable)
+            , onClick (RequestedDeleteSchool s)
                     ]
                     [ iconTrash
                     , span [] [ text "Delete" ]
@@ -331,7 +339,8 @@ schoolDetailView model s =
                         (button
                             [ class "detail-card__action"
                             , type_ "button"
-                            , onClick (OpenedAddStudentForSchool s)
+                            , Attr.disabled (not (Update.Access.canCreate model))
+                        , onClick (OpenedAddStudentForSchool s)
                             ]
                             [ text "Add student" ]
                         )
@@ -452,8 +461,8 @@ schoolContractPills sf =
         ]
 
 
-schoolFormView : SchoolForm -> Bool -> Html Msg
-schoolFormView sf isEdit =
+schoolFormView : Model -> SchoolForm -> Bool -> Html Msg
+schoolFormView model sf isEdit =
     let
         formError =
             schoolFormFieldError "form" sf
@@ -469,7 +478,7 @@ schoolFormView sf isEdit =
                 "Save school"
     in
     form [ onSubmit SubmittedSchoolForm, Attr.novalidate True ]
-        [ Html.node "crm-draft-recovery" [] []
+        [ View.Drafts.view model
         , case formError of
             Just msg ->
                 div [ class "ecc-alert ecc-alert--error" ] [ text msg ]
@@ -581,7 +590,7 @@ schoolFormModal model sf =
                     ]
 
               else
-                schoolFormView sf isEdit
+                schoolFormView model sf isEdit
             ]
         ]
 

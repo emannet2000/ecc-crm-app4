@@ -3,6 +3,7 @@ module Main exposing (main)
 import Api
 import Browser
 import Browser.Events
+import Dict
 import Browser.Navigation as Nav
 import Html
 import Html.Attributes as Attr
@@ -12,6 +13,8 @@ import Router exposing (parseRoute, routeToPath)
 import Set
 import Time
 import Types exposing (..)
+import Update.Access
+import Update.Drafts
 import Update.Activities
 import Update.Agents
 import Update.Auth
@@ -66,6 +69,8 @@ init flags url key =
             , submitting = False
             , token = flags.token
             , user = Nothing
+            , workspaceEditRequest = Nothing
+            , draftRecovery = Nothing
             , showPassword = False
             , bootstrapping = flags.token /= Nothing
             , route = route
@@ -90,6 +95,7 @@ init flags url key =
             , dateToFilter = ""
             , unreadNotifications = 0
             , today = flags.today
+            , bulkDealRevisions = Dict.empty
             , bulkMoveStage = Nothing
             , bulkDeleteConfirm = False
             , activities = NotAsked
@@ -101,6 +107,8 @@ init flags url key =
             , editingTaskId = Nothing
             , deletingTask = Nothing
             , pendingContactsQuery = Nothing
+            , dealsRefreshing = False
+            , dealStageFilter = ""
             , dealsRequestId = 0
             , pendingDealsQuery = Nothing
             , pendingTasksQuery = Nothing
@@ -173,6 +181,22 @@ init flags url key =
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
+    if Update.Access.busy msg model then
+        ( model, Cmd.none )
+
+    else if not (Update.Access.allowed msg model) then
+        ( { model | toast = Just "You do not have permission to change this record." }, Cmd.none )
+
+    else
+        let
+            ( next, command ) = updateAllowed msg model
+            ( recovered, storage ) = Update.Drafts.afterUpdate msg model next
+        in
+        ( recovered, Cmd.batch [ command, storage ] )
+
+
+updateAllowed : Msg -> Model -> ( Model, Cmd Msg )
+updateAllowed msg model =
     case msg of
         ToggledTheme ->
             let
@@ -312,7 +336,8 @@ updateDomains msg model =
             ( m2, cmd :: cmds )
         )
         ( model, [] )
-        [ Update.Workspace.update
+        [ Update.Drafts.update
+        , Update.Workspace.update
         , Update.Auth.update
         , Update.Navigation.update
         , Update.Contacts.update
@@ -348,7 +373,9 @@ escapeDecoder =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
-        [ Ports.recordChanged (\_ -> NavigatedTo model.route)
+        [ Ports.workspaceAction (\action -> if action.action == "edit" then RequestedWorkspaceEdit action.entity action.id else if action.action == "application" then RequestedWorkspaceApplication action.entity action.id else if action.action == "invoice" then RequestedWorkspaceInvoice action.entity action.id else NoOp)
+        , Ports.storedDraft GotStoredDraft
+        , Ports.recordChanged (\_ -> RefreshRecords)
         , Browser.Events.onKeyDown escapeDecoder
         , if model.user /= Nothing then
             Sub.batch [ Time.every 600000 (\_ -> RefreshSession), Time.every 60000 (\_ -> PollWorkspaceClock) ]

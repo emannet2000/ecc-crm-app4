@@ -74,55 +74,6 @@ test('statement reconciliation excludes other currencies and preserves a rejecte
  }finally{await page.close()}
 });
 
-test('modal drafts restore fields without restoring consent and retain their original record version',async()=>{
- const options={staleContact:true};const{page,calls,contact}=await fixture('workspace',options);try{
-  await page.evaluate(async()=>{
-   const nav=document.createElement('crm-nav-focus');nav.setAttribute('user-id','draft-user');document.body.append(nav);
-   await new Promise(resolve=>{const xhr=new XMLHttpRequest();xhr.open('GET','/api/contacts/c_client');xhr.onload=resolve;xhr.send()});
-   window.openDraftModal=()=>{const modal=document.createElement('div');modal.className='modal';modal.setAttribute('data-draft-record-id','c_client');modal.innerHTML='<h2>Edit contact</h2><form><crm-draft-recovery></crm-draft-recovery><input id="name" value="Client One"><input id="consent" type="checkbox"><button type="submit">Save</button></form>';modal.querySelector('form').addEventListener('submit',event=>{event.preventDefault();const xhr=new XMLHttpRequest();xhr.open('PUT','/api/contacts/c_client');xhr.send('{}')});document.body.append(modal)};
-   window.openDraftModal();
-  });
-  await page.waitForSelector('crm-draft-recovery');
-  await page.$eval('#name',e=>{e.value='Recovered client';e.dispatchEvent(new Event('input',{bubbles:true}))});
-  await page.click('#consent');
-  await page.evaluate(()=>{document.querySelector('.modal form').requestSubmit();document.querySelector('.modal form').requestSubmit()});
-  await page.waitForResponse(r=>new URL(r.url()).pathname==='/api/contacts/c_client'&&r.request().method()==='PUT');
-  assert.equal(calls.filter(c=>c.path==='/api/contacts/c_client'&&c.method==='PUT').length,1);
-  await page.waitForFunction(()=>document.querySelector('.save-recovery')?.textContent.includes('Save needs review'));
-  assert.equal(await page.$eval('#name',e=>e.value),'Recovered client');
-  assert.ok(await page.$eval('.save-recovery',e=>e.textContent.includes('Restore draft')&&e.textContent.includes('compare')));
-  await page.evaluate(()=>document.querySelector('.modal').remove());contact._revision='new-version';
-  await page.evaluate(async()=>{await new Promise(resolve=>{const xhr=new XMLHttpRequest();xhr.open('GET','/api/contacts/c_client');xhr.onload=resolve;xhr.send()});window.openDraftModal()});
-  await page.waitForFunction(()=>document.querySelector('crm-draft-recovery').textContent.includes('Restore draft'));
-  await page.evaluate(()=>[...document.querySelector('crm-draft-recovery').querySelectorAll('button')].find(b=>b.textContent==='Restore draft').click());
-  assert.equal(await page.$eval('#name',e=>e.value),'Recovered client');assert.equal(await page.$eval('#consent',e=>e.checked),false);
-  const response=page.waitForResponse(r=>new URL(r.url()).pathname==='/api/contacts/c_client'&&r.request().method()==='PUT');await page.$eval('.modal form',e=>e.requestSubmit());await response;
-  const puts=calls.filter(c=>c.path==='/api/contacts/c_client'&&c.method==='PUT');assert.equal(puts.at(-1).headers['if-match'],'old-version');
- }finally{await page.close()}
-});
-
-test('modal drafts stay isolated across records with the same title, including reused dialogs',async()=>{
- const {page}=await fixture('workspace');try{
-  await page.evaluate(()=>{
-   const nav=document.createElement('crm-nav-focus');nav.setAttribute('user-id','isolation-user');document.body.append(nav);
-   const modal=document.createElement('div');modal.className='modal';modal.setAttribute('data-draft-record-id','first');
-   modal.innerHTML='<h2>Edit contact</h2><form><crm-draft-recovery></crm-draft-recovery><input id="draft-name" value="Same name"></form>';document.body.append(modal);
-  });
-  await page.waitForFunction(()=>document.querySelector('.modal form'));
-  await page.$eval('#draft-name',e=>{e.value='First draft';e.dispatchEvent(new Event('input',{bubbles:true}))});
-  await page.evaluate(()=>{document.querySelector('#draft-name').value='Same name';document.querySelector('.modal').setAttribute('data-draft-record-id','second')});
-  await new Promise(r=>setTimeout(r,50));
-  assert.equal(await page.$eval('crm-draft-recovery',e=>e.textContent.includes('Restore draft')),false);
-  await page.$eval('#draft-name',e=>{e.value='Second draft';e.dispatchEvent(new Event('input',{bubbles:true}))});
-  for(const [id,expected] of [['first','First draft'],['second','Second draft']]){
-   await page.evaluate(id=>{document.querySelector('#draft-name').value='Same name';document.querySelector('.modal').setAttribute('data-draft-record-id',id)},id);
-   await page.waitForFunction(()=>document.querySelector('crm-draft-recovery').textContent.includes('Restore draft'));
-   await page.$eval('crm-draft-recovery button',e=>e.click());
-   assert.equal(await page.$eval('#draft-name',e=>e.value),expected);
-  }
- }finally{await page.close()}
-});
-
 async function fixture(view = 'contacts', options = {}) {
   const page = await browser.newPage(), calls=[], errors=[];
   const contact = {id:'c_client',name:'Client One',email:'client@example.com',phone:'+12025550123',orgId:'org_a',ownerId:'u_manager',visibility:'organization',_revision:'old-version'};
@@ -138,7 +89,7 @@ async function fixture(view = 'contacts', options = {}) {
       let data,contentType='application/json',status=200;
       if(url.pathname.startsWith('/public/')) {data=fs.readFileSync(path.join(__dirname,'..',url.pathname));contentType=url.pathname.endsWith('.css')?'text/css':'application/javascript';}
       else if(url.pathname==='/portal') {data=fs.readFileSync(path.join(__dirname,'../public/portal.html'));contentType='text/html';}
-      else if(url.pathname==='/') {contentType='text/html';data=`<!doctype html><html><head><meta charset="utf-8"></head><body><div id="app">${view==='leadwork'?'<crm-lead-work record-id="l_client"></crm-lead-work>':view==='picker'?'<crm-record-picker entity="contacts" value="c_client" label="Client"></crm-record-picker>':view==='ai'?'<crm-ai-chat></crm-ai-chat>':view==='workspace'?'<crm-workspace></crm-workspace>':view==='insights'?'<crm-insights></crm-insights>':view==='daily'?'<crm-my-work></crm-my-work>':view==='journey'?'<crm-student-journey record-id="s_client"></crm-student-journey>':view==='quality'?'<crm-form-quality entity="students" studentcode="DUP"></crm-form-quality>':view==='connections'?'<crm-integration-health></crm-integration-health>':`<crm-record-tools entity="${view}" record-id="${view==='students'?'s_client':view==='leads'?'l_client':'c_client'}"></crm-record-tools>`}</div><script src="/public/pickers.js"></script><script src="/public/assignment-review.js"></script><script src="/public/record-versions.js"></script><script src="/public/draft-recovery.js"></script><script src="/public/productivity.js"></script><script src="/public/ai.js"></script><script src="/public/followup-templates.js"></script><script src="/public/handoffs.js"></script><script src="/public/progress.js"></script><script src="/public/consolidation.js"></script><script src="/public/center.js"></script><script src="/public/components.js"></script><script src="/public/lead-work.js"></script></body></html>`;}
+      else if(url.pathname==='/') {contentType='text/html';data=`<!doctype html><html><head><meta charset="utf-8"></head><body><div id="app">${view==='leadwork'?'<crm-lead-work record-id="l_client"></crm-lead-work>':view==='picker'?'<crm-record-picker entity="contacts" value="c_client" label="Client"></crm-record-picker>':view==='ai'?'<crm-ai-chat></crm-ai-chat>':view==='workspace'?'<crm-workspace></crm-workspace>':view==='insights'?'<crm-insights></crm-insights>':view==='daily'?'<crm-my-work></crm-my-work>':view==='journey'?'<crm-student-journey record-id="s_client"></crm-student-journey>':view==='quality'?'<crm-form-quality entity="students" studentcode="DUP"></crm-form-quality>':view==='connections'?'<crm-integration-health></crm-integration-health>':`<crm-record-tools entity="${view}" record-id="${view==='students'?'s_client':view==='leads'?'l_client':'c_client'}"></crm-record-tools>`}</div><script src="/public/pickers.js"></script><script src="/public/assignment-review.js"></script><script src="/public/productivity.js"></script><script src="/public/ai.js"></script><script src="/public/followup-templates.js"></script><script src="/public/handoffs.js"></script><script src="/public/progress.js"></script><script src="/public/consolidation.js"></script><script src="/public/center.js"></script><script src="/public/components.js"></script><script src="/public/lead-work.js"></script></body></html>`;}
       else if(view==='picker'&&url.pathname==='/api/contacts/c_client') data={contact};
       else if(view==='picker'&&url.pathname==='/api/contacts') {
         let rows=Array.from({length:240},(_,i)=>({id:'pick-'+i,name:'Searchable client '+i,email:'client'+i+'@example.com'}));
@@ -244,10 +195,6 @@ test('follow-up rule preview surfaces a stale-preview rejection',async()=>{
  const {page,calls,errors}=await fixture('workspace');try{page.on('dialog',d=>d.accept());await page.waitForFunction(()=>document.querySelector('crm-workspace').shadowRoot.querySelectorAll('nav button').length);await page.evaluate(()=>[...document.querySelector('crm-workspace').shadowRoot.querySelectorAll('nav button')].find(b=>b.textContent==='Workflows').click());await page.waitForFunction(()=>document.querySelector('crm-workspace').shadowRoot.textContent.includes('Preview & enable'));await page.evaluate(()=>[...document.querySelector('crm-workspace').shadowRoot.querySelectorAll('button')].find(b=>b.textContent==='Preview & enable').click());await page.waitForFunction(()=>document.querySelector('crm-workspace').shadowRoot.textContent.includes('Records changed since the preview'));assert.ok(calls.some(c=>c.path==='/api/follow-up-rules/rule-1/preview'));assert.deepEqual(errors,[])}finally{await page.close()}
 });
 
-test('a background refresh cannot replace the version attached to an open edit dialog',async()=>{
- const {page,calls,contact,errors}=await fixture('workspace');try{assert.deepEqual(errors,[]);assert.equal(await page.evaluate(()=>XMLHttpRequest.prototype.open.toString().includes('crmURL')),true);await page.evaluate(async()=>{const get=()=>new Promise(resolve=>{const xhr=new XMLHttpRequest();xhr.open('GET','/api/contacts/c_client');xhr.onload=resolve;xhr.send()});await get();document.body.append(Object.assign(document.createElement('div'),{className:'modal-panel'}));await new Promise(resolve=>setTimeout(resolve,0))});contact._revision='new-version';await page.evaluate(async()=>{await new Promise(resolve=>{const xhr=new XMLHttpRequest();xhr.open('GET','/api/contacts/c_client');xhr.onload=resolve;xhr.send()});await new Promise(resolve=>{const xhr=new XMLHttpRequest();xhr.open('PUT','/api/contacts/c_client');xhr.onload=resolve;xhr.send('{}')})});assert.equal(calls.find(r=>r.path==='/api/contacts/c_client'&&r.method==='PUT').headers['if-match'],'old-version',JSON.stringify(calls.filter(r=>r.path==='/api/contacts/c_client')))}finally{await page.close()}
-});
-
 test('live app login, native record workflows, reporting and mobile layout', {skip:process.env.ECC_BROWSER_LIVE!=='true'},async()=>{
  const directory=fs.mkdtempSync(path.join(os.tmpdir(),'ecc-crm-browser-')),port='17001';
  const server=spawn(path.join(__dirname,'../build/ecc-crm'),[],{cwd:path.join(__dirname,'..'),env:{...process.env,PORT:port,DATABASE_PATH:path.join(directory,'crm.sqlite3'),JWT_SECRET:'browser-test-secret-only',APP_URL:'http://localhost:'+port,ALLOW_SIGNUP:'false',GRAPH_ORG_ID:'',WHATSAPP_ORG_ID:''},stdio:'pipe'});
@@ -256,9 +203,9 @@ test('live app login, native record workflows, reporting and mobile layout', {sk
  try{
   for(let i=0;i<100;i++){try{const response=await fetch('http://localhost:'+port+'/api/health');if(response.ok)break}catch{}await new Promise(resolve=>setTimeout(resolve,100))}
   await page.goto('http://localhost:'+port,{waitUntil:'networkidle2'});
-  await page.waitForSelector('input[type=email]');await page.type('input[type=email]','demo@northwind.dev');await page.type('input[type=password]','Demo1234');await page.click('button[type=submit]');
+  await page.waitForSelector('input[type=email]');await page.waitForSelector('input[type=email]');await page.type('input[type=email]','demo@northwind.dev');await page.type('input[type=password]','Demo1234');await page.click('button[type=submit]');
   await page.waitForSelector('.app-shell');
-  await page.goto('http://localhost:'+port+'/contacts/c_1',{waitUntil:'networkidle2'});
+  await page.goto('http://localhost:'+port+'/contacts/c_1',{waitUntil:'networkidle2'});await page.waitForSelector('.client-record-details');await page.$eval('.client-record-details',el=>el.open=true);
   await page.waitForFunction(()=>document.querySelector('crm-record-tools').shadowRoot.querySelector('form'));
   assert.equal(await page.$eval('body',el=>el.querySelectorAll('iframe').length),0);
   for (const width of [320,390,768]) {
@@ -268,7 +215,7 @@ test('live app login, native record workflows, reporting and mobile layout', {sk
     assert.ok(await page.$eval('body',el=>el.scrollWidth<=window.innerWidth+2), 'contacts overflow at '+width);
     assert.equal(await page.$eval('.mobile-nav',el=>getComputedStyle(el).display),'grid');
     if(width<=600) assert.equal(await page.$eval('table.data-table',el=>getComputedStyle(el).minWidth),'0px');
-    await page.click('.topbar__menu-btn');
+    await page.bringToFront();await page.click('.topbar__menu-btn');
     await page.waitForSelector('.sidebar.is-open');
     await page.waitForFunction(()=>document.querySelector('.app-main').inert);
     assert.equal(await page.$eval('.app-main',el=>el.inert),true);
@@ -311,19 +258,20 @@ test('live app login, native record workflows, reporting and mobile layout', {sk
   await page.waitForFunction(()=>!document.querySelector('.modal'));
   const lead=await page.evaluate(async()=>{const out=await(await fetch('/api/leads?q=flor-cv-browser@example.com')).json();return out.leads[0]});
   assert.equal(lead.referrer,'Flor');assert.equal(lead.source,'Referral');
-  await page.goto('http://localhost:'+port+'/leads/'+lead.id,{waitUntil:'networkidle2'});
+  await page.goto('http://localhost:'+port+'/leads/'+lead.id,{waitUntil:'networkidle2'});await page.waitForSelector('.client-record-details');await page.$eval('.client-record-details',el=>el.open=true);
   await page.waitForFunction(()=>document.querySelector('crm-lead-work')?.shadowRoot.querySelector('[name=nextAction]'));
   await page.evaluate(()=>{const form=document.querySelector('crm-lead-work').shadowRoot.querySelector('[name=nextAction]').closest('form');form.querySelector('[name=nextAction]').value='Call about missing transcript';form.querySelector('[name=followUpDate]').value='2000-01-01';form.requestSubmit()});
   await page.waitForFunction(()=>document.querySelector('crm-lead-work')?.shadowRoot.textContent.includes('Next action: Call about missing transcript'));
   await page.evaluate(()=>{const root=document.querySelector('crm-lead-work').shadowRoot;root.querySelector('[name=body]').value='Discussed documents with client';root.querySelector('[name=followUp]').checked=true;root.querySelector('[name=body]').closest('form').requestSubmit()});
   await page.waitForFunction(()=>[...document.querySelector('crm-lead-work')?.shadowRoot.querySelectorAll('article')||[]].some(e=>e.textContent.includes('Discussed documents with client')));
-  await page.goto('http://localhost:'+port+'/leads/'+lead.id,{waitUntil:'networkidle2'});
+  await page.goto('http://localhost:'+port+'/leads/'+lead.id,{waitUntil:'networkidle2'});await page.waitForSelector('.client-record-details');await page.$eval('.client-record-details',el=>el.open=true);
   await page.waitForFunction(()=>document.querySelector('crm-record-tools')?.shadowRoot.querySelector('input[type=file]'));
   const cvPath=path.join(directory,'client.txt');fs.writeFileSync(cvPath,'Flor CV Browser Client\nDegree in business');
   const picker=await page.evaluateHandle(()=>document.querySelector('crm-record-tools').shadowRoot.querySelector('input[type=file]'));await picker.asElement().uploadFile(cvPath);
   await page.evaluate(()=>document.querySelector('crm-record-tools').shadowRoot.querySelector('input[type=file]').closest('form').requestSubmit());
   await page.waitForFunction(()=>document.querySelector('crm-record-tools')?.shadowRoot.textContent.includes('Versions'));
   await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});
+  await page.waitForSelector('.client-record-details');await page.$eval('.client-record-details',el=>el.open=true);
   assert.ok(await page.$eval('body',e=>e.scrollWidth<=innerWidth+2),'lead CV panel overflows on phone');
   await page.waitForFunction(()=>{const form=document.querySelector('crm-record-tools')?.shadowRoot.querySelector('[name=target]')?.closest('form');return form&&!form.querySelector('button[type=submit]').disabled});
   await page.evaluate(()=>{const form=document.querySelector('crm-record-tools').shadowRoot.querySelector('[name=target]').closest('form');form.querySelector('[name=target]').value='student';form.querySelector('[name=confirmed]').checked=true;form.querySelector('button[type=submit]').click()});
@@ -335,7 +283,7 @@ test('live app login, native record workflows, reporting and mobile layout', {sk
   const original=await page.evaluate(async id=>await(await fetch('/api/documents/'+id+'/files/1')).text(),documents[0].id);assert.ok(original.includes('Degree in business'));
   const requirement=await page.evaluate(async id=>{const response=await fetch('/api/documents',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({caseId:id,docName:'Browser transcript',required:true,status:'Requested'})});return await response.json()},converted.convertedCaseId);
   assert.ok(requirement.document?.id);
-  await page.goto('http://localhost:'+port+'/cases/'+converted.convertedCaseId,{waitUntil:'networkidle2'});
+  await page.goto('http://localhost:'+port+'/cases/'+converted.convertedCaseId,{waitUntil:'networkidle2'});await page.waitForSelector('.client-record-details');await page.$eval('.client-record-details',el=>el.open=true);
   await page.waitForFunction(()=>document.querySelector('crm-application-blockers')?.shadowRoot.querySelector('[name=responsibleId]'));
   await page.evaluate(()=>{const form=document.querySelector('crm-application-blockers').shadowRoot.querySelector('[name=responsibleId]').closest('form');form.querySelector('[name=responsibleId]').value='u_1';form.querySelector('[name=dueDate]').value='2000-01-01';form.requestSubmit()});
   await page.waitForFunction(()=>document.querySelector('crm-application-blockers')?.shadowRoot.textContent.includes('Responsible: Demo User'));
@@ -351,11 +299,11 @@ test('live app login, native record workflows, reporting and mobile layout', {sk
   await page.waitForFunction(()=>document.querySelector('crm-form-quality')?.shadowRoot.querySelector('a'));
   await page.click('.modal button[type=submit]');
   await page.waitForFunction(()=>document.querySelector('.modal input[type=checkbox]'));
-  await page.$eval('.modal input[type=checkbox]',e=>{e.checked=true;e.dispatchEvent(new Event('change',{bubbles:true}))});
+  await page.click('.modal input[type=checkbox]');
   await page.click('.modal button[type=submit]');
   await page.waitForFunction(()=>!document.querySelector('.modal'));
 
- }catch(error){fs.mkdirSync(path.join(__dirname,'artifacts'),{recursive:true});await page.screenshot({path:path.join(__dirname,'artifacts/live-failure.png'),fullPage:true});throw new Error(error.message+'\nUI: '+await page.evaluate(()=>JSON.stringify({url:location.pathname,width:innerWidth,mobile:matchMedia('(max-width: 900px)').matches,mainInert:document.querySelector('.app-main')?.inert,mainAttr:document.querySelector('.app-main')?.hasAttribute('inert'),sideInert:document.querySelector('.sidebar')?.inert,work:document.querySelector('crm-my-work')?.shadowRoot.textContent,active:document.activeElement?.outerHTML?.slice(0,200)}))+'\n'+output)}finally{await page.close();server.kill('SIGTERM');await new Promise(resolve=>{if(server.exitCode!==null)return resolve();server.once('exit',resolve)});fs.rmSync(directory,{recursive:true,force:true})}
+ }catch(error){fs.mkdirSync(path.join(__dirname,'artifacts'),{recursive:true});await page.screenshot({path:path.join(__dirname,'artifacts/live-failure.png'),fullPage:true});throw new Error(error.message+'\nUI: '+await page.evaluate(()=>JSON.stringify({url:location.pathname,width:innerWidth,mobile:matchMedia('(max-width: 900px)').matches,mainInert:document.querySelector('.app-main')?.inert,mainAttr:document.querySelector('.app-main')?.hasAttribute('inert'),sideInert:document.querySelector('.sidebar')?.inert,work:document.querySelector('crm-my-work')?.shadowRoot.textContent,active:document.activeElement?.outerHTML?.slice(0,200),close:document.querySelector('.sidebar__close')?.outerHTML,ancestors:[...document.querySelectorAll('[inert]')].map(e=>e.className),focused:document.hasFocus()}))+'\n'+output)}finally{await page.close();server.kill('SIGTERM');await new Promise(resolve=>{if(server.exitCode!==null)return resolve();server.once('exit',resolve)});fs.rmSync(directory,{recursive:true,force:true})}
 });
 
 test('live dashboard overview cards open record details on desktop and mobile',{skip:process.env.ECC_BROWSER_LIVE!=='true'},async()=>{
@@ -367,7 +315,7 @@ test('live dashboard overview cards open record details on desktop and mobile',{
   for(let i=0;i<100;i++){try{if((await fetch('http://localhost:'+port+'/api/health')).ok)break}catch{}await new Promise(r=>setTimeout(r,100))}
   await page.setViewport({width:1280,height:900});
   await page.goto('http://localhost:'+port,{waitUntil:'networkidle2'});
-  await page.waitForSelector('input[type=email]');await page.type('input[type=email]','demo@northwind.dev');await page.type('input[type=password]','Demo1234');await page.click('button[type=submit]');
+  await page.waitForSelector('input[type=email]');await page.waitForSelector('input[type=email]');await page.type('input[type=email]','demo@northwind.dev');await page.type('input[type=password]','Demo1234');await page.click('button[type=submit]');
   await page.waitForSelector('.app-shell');
   for(const width of [1280,390]){
    await page.setViewport({width,height:900});
@@ -661,16 +609,6 @@ test('lead work edits next actions with a revision, logs performed activity and 
  }finally{await page.close()}
 });
 
-test('bulk requests keep reviewed revisions when records refresh behind a confirmation',async()=>{
- const {page,calls,contact}=await fixture('workspace');try{
-  await page.evaluate(async()=>{await new Promise(resolve=>{const xhr=new XMLHttpRequest();xhr.open('GET','/api/contacts/c_client');xhr.onload=resolve;xhr.send()});document.body.append(Object.assign(document.createElement('div'),{className:'modal-panel'}));await new Promise(resolve=>setTimeout(resolve,0))});
-  contact._revision='new-version';
-  await page.evaluate(async()=>{await new Promise(resolve=>{const xhr=new XMLHttpRequest();xhr.open('GET','/api/contacts/c_client');xhr.onload=resolve;xhr.send()});await new Promise(resolve=>{const xhr=new XMLHttpRequest();xhr.open('POST','/api/contacts/bulk');xhr.setRequestHeader('Content-Type','application/json');xhr.onload=resolve;xhr.send(JSON.stringify({ids:['c_client','unreviewed'],stage:'Client'}))})});
-  const request=calls.find(c=>c.path==='/api/contacts/bulk');assert.deepEqual(JSON.parse(request.body).revisions,{c_client:'old-version',unreviewed:''});
- }finally{await page.close()}
-});
-
-
 test('application requirements keep missing files visible and collapse completed files and assignment controls',async()=>{
  const {page,errors}=await fixture('workspace');try{
   await page.evaluate(()=>{const essentials=document.createElement('section');essentials.className='application-essentials';const panel=document.createElement('crm-application-blockers');panel.setAttribute('record-id','case_client');essentials.append(panel);document.body.append(essentials)});
@@ -691,11 +629,11 @@ test('live application essentials group daily actions and reveal linked handoffs
  try{
   for(let i=0;i<100;i++){try{if((await fetch('http://localhost:'+port+'/api/health')).ok)break}catch{}await new Promise(resolve=>setTimeout(resolve,100))}
   await page.goto('http://localhost:'+port,{waitUntil:'networkidle2'});
-  await page.type('input[type=email]','demo@northwind.dev');await page.type('input[type=password]','Demo1234');await page.click('button[type=submit]');await page.waitForSelector('.app-shell');
+  await page.waitForSelector('input[type=email]');await page.type('input[type=email]','demo@northwind.dev');await page.type('input[type=password]','Demo1234');await page.click('button[type=submit]');await page.waitForSelector('.app-shell');
   const id=await page.evaluate(async()=>{const out=await(await fetch('/api/cases')).json();return out.cases[0].id});
   for(const width of [1280,390]){
    await page.setViewport({width,height:900});
-   await page.goto('http://localhost:'+port+'/cases/'+id,{waitUntil:'networkidle2'});
+   await page.goto('http://localhost:'+port+'/cases/'+id,{waitUntil:'networkidle2'});await page.waitForSelector('.client-record-details');await page.$eval('.client-record-details',el=>el.open=true);
    await page.waitForSelector('.application-essentials');
    await page.waitForFunction(()=>document.querySelector('.application-essentials crm-work-plan')?.shadowRoot.querySelector('textarea'));
    assert.equal(await page.$eval('crm-record-tools',e=>e.shadowRoot.querySelectorAll('crm-work-plan').length),0);
@@ -703,7 +641,7 @@ test('live application essentials group daily actions and reveal linked handoffs
    assert.ok(essentials.includes('Application essentials')&&essentials.includes('Stage:'));
    assert.equal(await page.$eval('#handoff',e=>e.open),false);
    assert.equal(await page.$eval('.application-controls:last-of-type',e=>e.open),false);
-   await page.goto('http://localhost:'+port+'/cases/'+id+'#handoff',{waitUntil:'networkidle2'});
+   await page.goto('http://localhost:'+port+'/cases/'+id+'#handoff',{waitUntil:'networkidle2'});await page.waitForSelector('.client-record-details');await page.$eval('.client-record-details',el=>el.open=true);
    await page.waitForFunction(()=>document.getElementById('handoff')?.open);
    await page.$eval('.application-essentials button',e=>e.click());await page.waitForSelector('#cf-nextAction');
    assert.equal(await page.$eval('#cf-assignedOfficer',e=>e.getAttribute('entity')),'cases');

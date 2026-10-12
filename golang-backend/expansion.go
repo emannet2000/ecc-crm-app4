@@ -36,6 +36,7 @@ func registerExpansionRoutes(m *http.ServeMux) {
 	m.HandleFunc("GET /api/trash/purge-preview", authMiddleware(handleTrashPreview))
 	m.HandleFunc("POST /api/trash/purge", authMiddleware(handleTrashPurge))
 	m.HandleFunc("GET /api/records/{entity}/{id}", authMiddleware(handleSQLRecord))
+	m.HandleFunc("GET /api/records/{entity}/{id}/workspace", authMiddleware(handleClientWorkspace))
 	m.HandleFunc("GET /api/insights", authMiddleware(handleInsights))
 	m.HandleFunc("GET /api/trash", authMiddleware(handleTrash))
 	m.HandleFunc("POST /api/trash/{batch}/restore", authMiddleware(handleRestoreTrash))
@@ -49,6 +50,8 @@ func migrateExpansion(tx *sql.Tx) error {
 		`CREATE TABLE IF NOT EXISTS team_messages(seq INTEGER PRIMARY KEY AUTOINCREMENT,org_id TEXT NOT NULL,sender_id TEXT NOT NULL,recipient_id TEXT NOT NULL,body TEXT NOT NULL,client_id TEXT NOT NULL,created_at TEXT NOT NULL,read_at TEXT NOT NULL DEFAULT '',UNIQUE(org_id,sender_id,recipient_id,client_id))`,
 		`CREATE INDEX IF NOT EXISTS team_messages_conversation ON team_messages(org_id,sender_id,recipient_id,seq)`,
 		`CREATE INDEX IF NOT EXISTS team_messages_unread ON team_messages(org_id,recipient_id,sender_id) WHERE read_at=''`,
+		`CREATE INDEX IF NOT EXISTS deals_board_order ON deals(json_extract(data,'$.orgId'),sort_order,id)`,
+		`CREATE INDEX IF NOT EXISTS deals_board_owner_close ON deals(json_extract(data,'$.orgId'),json_extract(data,'$.owner'),json_extract(data,'$.closeDate'),sort_order,id)`,
 		`CREATE INDEX IF NOT EXISTS contacts_org_email ON contacts(json_extract(data,'$.orgId'),lower(json_extract(data,'$.email')))`,
 		`CREATE TABLE IF NOT EXISTS trash_batches(id TEXT PRIMARY KEY,org_id TEXT NOT NULL,actor TEXT NOT NULL,label TEXT NOT NULL,data TEXT NOT NULL,deleted_at TEXT NOT NULL,restored_at TEXT)`,
 		`CREATE TABLE IF NOT EXISTS application_gate_rules(org_id TEXT NOT NULL,stage TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(org_id,stage))`,
@@ -88,14 +91,16 @@ func validEntity(entity string) bool {
 func versionOf(record map[string]any) string {
 	copy := make(map[string]any, len(record))
 	for k, v := range record {
-		if k != "_revision" {
+		if k != "_revision" && k != "_editable" {
 			copy[k] = v
 		}
 	}
 	b, _ := json.Marshal(copy)
 	return fmt.Sprintf("%x", sha256.Sum256(b))
 }
-func withRecordVersions(payload any) any {
+func withRecordVersions(payload any) any { return withRecordVersionsFor(payload, nil) }
+
+func withRecordVersionsFor(payload any, user *User) any {
 	b, err := json.Marshal(payload)
 	if err != nil {
 		return payload
@@ -110,6 +115,9 @@ func withRecordVersions(payload any) any {
 		case map[string]any:
 			if _, hasScope := x["visibility"]; hasScope && x["id"] != nil {
 				x["_revision"] = versionOf(x)
+				if user != nil {
+					x["_editable"] = canWrite(recordScopeMap(x), *user)
+				}
 			}
 			for _, child := range x {
 				walk(child)

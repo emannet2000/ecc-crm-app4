@@ -313,7 +313,7 @@ update msg model =
         ConfirmedDeleteCase ->
             case ( model.deletingCase, model.token ) of
                 ( Just c, Just token ) ->
-                    ( model, Api.deleteCase token c.id GotDeletedCase )
+                    ( model, Api.deleteCase token c.id c.revision GotDeletedCase )
 
                 _ ->
                     ( model, Cmd.none )
@@ -553,7 +553,7 @@ update msg model =
         ConfirmedDeleteDocument ->
             case ( model.deletingDocument, model.token ) of
                 ( Just d, Just token ) ->
-                    ( model, Api.deleteDocument token d.id GotDeletedDocument )
+                    ( model, Api.deleteDocument token d.id d.revision GotDeletedDocument )
 
                 _ ->
                     ( model, Cmd.none )
@@ -578,7 +578,7 @@ update msg model =
         UpdatedDocumentStatus d newStatus ->
             case model.token of
                 Just token ->
-                    ( model, Api.updateDocumentStatus token d.id newStatus GotUpdatedDocument )
+                    ( model, Api.updateDocumentStatus token d.id d.revision newStatus GotUpdatedDocument )
 
                 Nothing ->
                     ( model, Cmd.none )

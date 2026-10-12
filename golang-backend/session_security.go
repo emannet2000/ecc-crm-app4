@@ -150,7 +150,7 @@ func authorizeWorkspaceRequest(next http.HandlerFunc, w http.ResponseWriter, r *
 		meta.Actor = user.Email
 		meta.OrgID = user.OrgID
 	}
-	scopedHandler(next, w, r, user)
+	scopedHandler(next, recordCapabilityWriter{ResponseWriter: w, user: user}, r, user)
 }
 func setSessionCookies(w http.ResponseWriter, r *http.Request, access, refresh string, remember bool) {
 	maxAge := 0

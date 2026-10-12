@@ -16,6 +16,7 @@ html.crm-scroll-locked,html.crm-scroll-locked body{overflow:hidden;overscroll-be
   .app-shell .sidebar__nav--bottom{margin-top:8px;padding-top:8px}
   .app-shell .sidebar .nav-item,.app-shell .sidebar__signout-btn{min-height:44px}
   .app-shell .sidebar__user{margin-top:6px}
+  .app-shell .sidebar :is(select,input:not([type=checkbox])){background:#253248;color:#edf1f7;border-color:#58677d;color-scheme:dark}
   .app-shell .mobile-nav{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));position:fixed;z-index:120;inset:auto 0 0;background:var(--surface);border-top:1px solid var(--border);padding:4px max(4px,env(safe-area-inset-right)) env(safe-area-inset-bottom) max(4px,env(safe-area-inset-left));box-shadow:0 -3px 15px #18273e08}
   .app-shell .mobile-nav .nav-item{display:flex;flex-direction:column;justify-content:center;align-items:center;gap:4px;min-width:0;min-height:58px;margin:0;padding:6px 2px;border-radius:9px;color:var(--text-muted);font-size:11px;line-height:1.2}
   .app-shell .mobile-nav .nav-item--active{color:var(--primary);background:color-mix(in srgb,var(--primary) 14%,var(--surface))}
@@ -99,10 +100,74 @@ html.crm-scroll-locked,html.crm-scroll-locked body{overflow:hidden;overscroll-be
 #offline-work[data-theme=dark] { background: #182130; color: #e8edf5; color-scheme: dark; }
 #offline-work button { color: inherit; }
 
-/* A focused sign-in flow and five primary mobile destinations. */
-.auth-mobile-brand{display:none}.auth-verification{margin:16px 0;color:var(--text-muted,#637086);font-size:14px}.auth-verification summary{cursor:pointer;min-height:44px;display:list-item;align-content:center}.auth-verification input{width:100%;padding:12px;font:inherit;border:1px solid #bbc5d3;border-radius:8px;margin-top:8px}.auth-alternatives{display:grid;gap:14px;margin-top:22px;text-align:center;font-size:14px}.auth-alternatives a{min-height:32px;align-content:center}.auth-verification summary:focus-visible{outline:3px solid #3b82f6}
-@media(max-width:600px){.ecc-split{min-height:100dvh;background:var(--surface,#fff)}.auth-panel{align-items:flex-start;padding:40px max(24px,env(safe-area-inset-left)) max(24px,env(safe-area-inset-bottom));min-height:100dvh}.auth-panel__inner{max-width:420px;width:100%;margin:auto}.auth-mobile-brand{display:flex;gap:12px;align-items:center;margin-bottom:36px;font-weight:700;font-size:18px}.auth-mobile-brand img{border-radius:12px}.auth-title{font-family:var(--font-sans,system-ui);font-size:30px;line-height:1.2;letter-spacing:-.6px;color:var(--text,#243044)}.auth-subtitle{font-size:15px;line-height:1.5}.auth-header{margin-bottom:28px}.auth-panel .ecc-btn{min-height:52px;border-radius:12px}.auth-panel .ecc-field{margin-bottom:18px}.auth-switch{margin-top:28px}.auth-footer{margin-top:32px}.app-shell .content__description{display:none}.app-shell .content__header{margin-bottom:16px}.app-shell .live-pill{display:none}.app-shell .mobile-nav .nav-item__label{font-size:11px}.app-shell .mobile-nav .nav-item{min-height:52px}.app-shell .content{padding-bottom:calc(85px + env(safe-area-inset-bottom))}}
-
-@media(max-width:600px){.motif-line,.motif-orb,.motif-dots{display:none}.auth-panel .ecc-btn{width:100%;box-shadow:none}.auth-verification summary{line-height:1.5}.auth-panel .ecc-row{margin-bottom:20px}}
+/* Sign-in keeps its own palette, independently of the workspace theme. */
+.auth-panel { --auth-text:#f5eedc; --auth-muted:#bdb7aa; --auth-surface:#131820; --auth-border:#58616d; }
+.auth-mobile-brand { display:none; }
+.auth-options { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:8px 16px; }
+.auth-forgot { display:inline-flex; align-items:center; min-height:44px; font-size:14px; }
+.auth-verification { margin:12px 0; color:var(--auth-muted); font-size:14px; }
+.auth-verification summary { cursor:pointer; min-height:44px; align-content:center; line-height:1.5; }
+.auth-verification input { width:100%; padding:12px; font:inherit; color:var(--auth-text); background:var(--auth-surface); border:1px solid var(--auth-border); border-radius:12px; margin-top:8px; }
+.auth-alternatives { display:grid; margin-top:16px; text-align:center; font-size:14px; }
+.auth-alternatives a { display:flex; align-items:center; justify-content:center; min-height:48px; padding:10px 12px; border:1px solid var(--auth-border); border-radius:12px; line-height:1.4; }
+.auth-verification summary:focus-visible { outline:2px solid var(--gold-bright); outline-offset:4px; }
+@media(max-width:900px) {
+  .ecc-split { min-height:100svh; background:#0b1018; }
+  .auth-panel { align-items:flex-start; min-height:100svh; padding:calc(28px + env(safe-area-inset-top)) max(24px,env(safe-area-inset-right)) calc(24px + env(safe-area-inset-bottom)) max(24px,env(safe-area-inset-left)); color:var(--auth-text); }
+  .auth-panel__inner { width:100%; max-width:420px; margin:0 auto; }
+  .auth-mobile-brand { display:flex; align-items:center; gap:12px; margin-bottom:28px; font-weight:650; font-size:17px; letter-spacing:.01em; }
+  .auth-mobile-brand img { width:44px; height:44px; border-radius:12px; }
+  .auth-title { font-family:var(--font-sans); font-size:30px; font-weight:650; line-height:1.2; letter-spacing:-.7px; color:var(--auth-text); }
+  .auth-subtitle { margin:8px 0 0; color:var(--auth-muted); font-size:15px; line-height:1.5; }
+  .auth-header { margin-bottom:24px; }
+  .auth-form .ecc-field { display:flex; flex-direction:column; margin-bottom:18px; }
+  .auth-form .ecc-field > input + label { position:static; order:-1; padding:0; margin:0 0 8px; background:none; font-size:14px; font-weight:550; letter-spacing:0; text-transform:none; color:var(--auth-text); pointer-events:auto; }
+  .auth-form .ecc-field input { min-height:54px; padding:14px 16px; background:var(--auth-surface); color:var(--auth-text); border-color:var(--auth-border); border-radius:12px; font-size:16px; line-height:24px; }
+  .auth-form #password { padding-right:60px; }
+  .auth-form .ecc-field__toggle { width:48px; height:48px; top:31px; right:4px; transform:none; align-items:center; justify-content:center; color:var(--auth-muted); padding:0; }
+  .auth-panel :is(input,select,textarea) { font-size:16px; scroll-margin-block:24px; }
+  .auth-panel .ecc-checkbox { min-height:44px; font-size:14px; color:var(--auth-muted); gap:10px; }
+  .auth-panel .ecc-checkbox input { width:20px; height:20px; min-height:20px; }
+  .auth-panel .ecc-row { margin:8px 0 16px; }
+  .auth-panel .ecc-btn { min-height:54px; width:100%; justify-content:center; border-radius:12px; box-shadow:none; font-size:16px; }
+  .auth-panel button,.auth-panel a { touch-action:manipulation; }
+  .auth-switch { margin:20px 0 0; color:var(--auth-muted); font-size:14px; }
+  .auth-switch button { min-height:44px; padding:8px 4px; }
+  .auth-footer { margin-top:20px; color:var(--auth-muted); }
+  .motif-line,.motif-orb,.motif-dots { display:none; }
+}
+@media(max-width:600px) {
+  .app-shell .content__description,.app-shell .live-pill { display:none; }
+  .app-shell .content__header { margin-bottom:16px; }
+  .app-shell .mobile-nav .nav-item__label { font-size:11px; }
+  .app-shell .mobile-nav .nav-item { min-height:56px; }
+  .app-shell .content { padding-bottom:calc(85px + env(safe-area-inset-bottom)); }
+}
+@media(max-width:360px), (max-height:540px) and (max-width:900px) {
+  .auth-panel { padding-top:calc(16px + env(safe-area-inset-top)); }
+  .auth-mobile-brand { margin-bottom:18px; }
+  .auth-header { margin-bottom:20px; }
+  .auth-title { font-size:27px; }
+  .auth-form .ecc-field { margin-bottom:16px; }
+}
 
 @media(max-width:700px){.app-shell--chat .content__header{display:none}.app-shell--chat .content{padding-bottom:calc(70px + env(safe-area-inset-bottom))}}
+
+.deals-mobile-hint{display:none}
+@media(max-width:900px){
+ .app-shell .pipeline-board{grid-auto-flow:column;grid-template-columns:none;grid-auto-columns:minmax(250px,82vw)}
+ .app-shell .pipeline-board:has(>.pipeline-col:only-child){grid-auto-flow:row;grid-template-columns:minmax(0,1fr);grid-auto-columns:auto}
+ .app-shell .deal-card{padding:64px 12px 12px}
+ .app-shell .deal-card__checkbox{top:8px;left:8px;width:44px;height:44px}
+ .app-shell .deal-card__menu{top:8px;right:8px;gap:6px;opacity:1}
+ .app-shell .deal-card__value{padding-right:0}
+ .app-shell .deal-card__footer{flex-wrap:wrap;gap:8px}
+ .app-shell .deal-card__meta{min-width:0;flex:1 1 150px}
+ .app-shell .deal-card__move{margin-left:auto}
+ .app-shell .deals-mobile-hint{display:block;font-size:12px;color:var(--text-muted)}
+}
+@media(max-width:900px){
+ .app-shell .sidebar{transform:none;opacity:0;transition:opacity .14s ease}
+ .app-shell .sidebar.is-open{transform:none;opacity:1}
+}
+@media(prefers-reduced-motion:reduce){.app-shell .sidebar{transition:none}}

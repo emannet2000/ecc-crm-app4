@@ -64,20 +64,13 @@
           if (this.returnFocus?.isConnected) this.returnFocus.focus();
         }
       }
-      const readonly = this.document.querySelector('.app-shell--viewer');
-      if (readonly) {
-        for (const button of readonly.querySelectorAll('button')) {
-          const label = (button.textContent || '').trim();
-          if (/^(Add |Edit$|Delete$|Move |Refund|Request refund|Update action, owner or due date$|Change owner or application details$)/i.test(label) || button.classList.contains('task-status')) {
-            if (!button.disabled) button.disabled = true;
-            if (button.title !== 'Your role has read-only access') button.title = 'Your role has read-only access';
-            if (button.getAttribute('aria-disabled') !== 'true') button.setAttribute('aria-disabled', 'true');
-          }
-        }
-      }
       if (window.location.hash === '#handoff') {
         const panel = this.document.getElementById('handoff');
         if (panel?.tagName === 'DETAILS' && !panel.open) panel.open = true;
+      }
+      if (['#handoff', '#next-action', '#record-details'].includes(window.location.hash)) {
+        const details = this.document.querySelector('.client-record-details');
+        if (details && !details.open) details.open = true;
       }
     }
 

@@ -320,7 +320,7 @@ update msg model =
         ConfirmedDeletePartner ->
             case ( model.deletingPartner, model.token ) of
                 ( Just p, Just token ) ->
-                    ( model, Api.deletePartner token p.id GotDeletedPartner )
+                    ( model, Api.deletePartner token p.id p.revision GotDeletedPartner )
 
                 _ ->
                     ( model, Cmd.none )

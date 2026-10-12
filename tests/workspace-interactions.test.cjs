@@ -26,10 +26,11 @@ test('workspace keyboard controller delegates row activation once and removes li
  controller.stop();key(window,rows[0],'Enter');assert.equal(clicks,1);
  controller.start();key(window,rows[0],' ');assert.equal(clicks,2);controller.stop();
 });
-test('workspace controller traps modal focus, restores its trigger and supports deep links and viewers',async()=>{
- const {window,document,controller}=mount('<div class="app-shell--viewer"><button id="update">Update action, owner or due date</button><button id="trigger">View</button></div><details id="handoff"><summary>Handoffs</summary></details>');
+test('workspace controller traps modal focus, restores its trigger and supports deep links without inferring permissions from labels',async()=>{
+ const {window,document,controller}=mount('<div class="app-shell--viewer"><button id="update" disabled>Update action, owner or due date</button><button id="trigger">View</button></div><details id="handoff"><summary>Handoffs</summary></details>');
  const trigger=document.getElementById('trigger');trigger.focus();controller.start();
  assert.equal(document.getElementById('update').disabled,true);assert.equal(trigger.disabled,false);
+ const unrelated=document.createElement("button");unrelated.textContent="Edit";document.querySelector(".app-shell--viewer").append(unrelated);controller.refresh();assert.equal(unrelated.disabled,false);
  window.location.hash='#handoff';window.dispatchEvent(new window.Event('hashchange'));assert.equal(document.getElementById('handoff').open,true);
  const dialog=document.createElement('div');dialog.className='modal';dialog.innerHTML='<h2>Edit application</h2><input id="first"><button id="last">Save</button>';document.body.append(dialog);await tick();
  assert.equal(dialog.getAttribute('aria-label'),'Edit application');assert.equal(document.activeElement.id,'first');

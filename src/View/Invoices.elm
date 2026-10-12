@@ -3,6 +3,8 @@ module View.Invoices exposing (deleteInvoiceConfirmModal, deletePaymentConfirmMo
 {-| Invoices: list, detail (with payments panel), form + payment + refund modals.
 -}
 
+import View.Drafts
+import Update.Access
 import Html exposing (..)
 import Html.Attributes as Attr exposing (class, disabled, for, id, placeholder, type_, value)
 import Html.Events exposing (onClick, onInput, onSubmit)
@@ -57,6 +59,7 @@ invoiceRow inv =
                 [ class "row-action"
                 , type_ "button"
                 , Attr.title "Edit"
+                , Attr.disabled (not inv.editable)
                 , Html.Events.stopPropagationOn "click"
                     (D.succeed ( OpenedEditInvoice inv, True ))
                 ]
@@ -65,6 +68,7 @@ invoiceRow inv =
                 [ class "row-action row-action--danger"
                 , type_ "button"
                 , Attr.title "Delete"
+                , Attr.disabled (not inv.editable)
                 , Html.Events.stopPropagationOn "click"
                     (D.succeed ( RequestedDeleteInvoice inv, True ))
                 ]
@@ -124,6 +128,7 @@ invoicesView model =
                     , button
                         [ class "ecc-btn ecc-btn--inline"
                         , type_ "button"
+                        , Attr.disabled (not (Update.Access.canCreate model))
                         , onClick OpenedAddInvoice
                         ]
                         [ text "Add invoice" ]
@@ -199,7 +204,8 @@ paymentItem pmt =
                     [ class "row-action row-action--danger row-action--tiny"
                     , type_ "button"
                     , Attr.title "Delete payment"
-                    , onClick (RequestedDeletePayment pmt)
+                    , Attr.disabled (not pmt.editable)
+            , onClick (RequestedDeletePayment pmt)
                     ]
                     [ iconTrash ]
                 ]
@@ -271,7 +277,8 @@ invoiceDetailView model inv =
                 [ button
                     [ class "ecc-btn ecc-btn--ghost ecc-btn--inline"
                     , type_ "button"
-                    , onClick (OpenedEditInvoice inv)
+                    , Attr.disabled (not inv.editable)
+            , onClick (OpenedEditInvoice inv)
                     ]
                     [ iconEdit
                     , span [] [ text "Edit" ]
@@ -279,7 +286,8 @@ invoiceDetailView model inv =
                 , button
                     [ class "ecc-btn ecc-btn--danger ecc-btn--inline"
                     , type_ "button"
-                    , onClick (RequestedDeleteInvoice inv)
+                    , Attr.disabled (not inv.editable)
+            , onClick (RequestedDeleteInvoice inv)
                     ]
                     [ iconTrash
                     , span [] [ text "Delete" ]
@@ -348,6 +356,7 @@ invoiceDetailView model inv =
                         (button
                             [ class "detail-card__action"
                             , type_ "button"
+                            , Attr.disabled (not inv.editable)
                             , onClick OpenedPaymentForm
                             ]
                             [ text "Record payment" ]
@@ -505,7 +514,7 @@ invoiceFormView model inv isEdit =
                 "Save invoice"
     in
     form [ onSubmit SubmittedInvoiceForm, Attr.novalidate True ]
-        [ Html.node "crm-draft-recovery" [] []
+        [ View.Drafts.view model
         , case formError of
             Just msg ->
                 div [ class "ecc-alert ecc-alert--error" ] [ text msg ]
@@ -688,7 +697,7 @@ paymentFormModal model pf =
             [ header [ class "modal__header" ]
                 [ h2 [ class "modal__title" ] [ text "Record payment" ] ]
             , form [ onSubmit SubmittedPaymentForm, Attr.novalidate True ]
-                [ Html.node "crm-draft-recovery" [] []
+                [ View.Drafts.view model
                 , case fieldErr "form" of
                     Just msg ->
                         div [ class "ecc-alert ecc-alert--error" ] [ text msg ]

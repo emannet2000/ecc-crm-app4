@@ -3,6 +3,7 @@ module View.Activity exposing (activityFeed, activityFormModal, deleteActivityCo
 {-| Activity feed and activity form.
 -}
 
+import View.Drafts
 import Html exposing (..)
 import Html.Attributes as Attr exposing (class, disabled, for, id, placeholder, type_, value)
 import Html.Events exposing (onClick, onInput, onSubmit)
@@ -61,7 +62,8 @@ activityItemView a =
                     , type_ "button"
                     , Attr.title "Delete activity"
                     , Attr.attribute "aria-label" ("Delete " ++ a.title)
-                    , onClick (RequestedDeleteActivity a)
+                    , Attr.disabled (not a.editable)
+            , onClick (RequestedDeleteActivity a)
                     ]
                     [ iconTrash ]
                 ]
@@ -139,8 +141,8 @@ activityKindPills af =
         ]
 
 
-activityFormView : ActivityForm -> Html Msg
-activityFormView af =
+activityFormView : Model -> ActivityForm -> Html Msg
+activityFormView model af =
     let
         formError =
             activityFormFieldError "form" af
@@ -164,7 +166,7 @@ activityFormView af =
                 "Log activity"
     in
     form [ onSubmit SubmittedActivityForm, Attr.novalidate True ]
-        [ Html.node "crm-draft-recovery" [ Attr.attribute "record-id" "new" ] []
+        [ View.Drafts.view model
         , case formError of
             Just msg ->
                 div [ class "ecc-alert ecc-alert--error" ] [ text msg ]
@@ -255,8 +257,8 @@ discardActivityConfirmView =
         ]
 
 
-activityFormModal : ActivityForm -> Html Msg
-activityFormModal af =
+activityFormModal : Model -> ActivityForm -> Html Msg
+activityFormModal model af =
     div [ class "modal-backdrop", onClick RequestedCloseActivityForm ]
         [ div
             [ class "modal modal--wide"
@@ -293,7 +295,7 @@ activityFormModal af =
                 discardActivityConfirmView
 
               else
-                activityFormView af
+                activityFormView model af
             ]
         ]
 

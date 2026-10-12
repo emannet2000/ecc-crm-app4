@@ -3,6 +3,8 @@ module View.Tasks exposing (deleteTaskConfirmModal, taskFormModal, tasksView)
 {-| Tasks page, task form and delete confirmation.
 -}
 
+import View.Drafts
+import Update.Access
 import Html exposing (..)
 import Html.Attributes as Attr exposing (class, disabled, for, id, placeholder, type_, value)
 import Html.Events exposing (onClick, onInput, onSubmit)
@@ -110,7 +112,8 @@ tasksView model =
                             )
                             [ "", "todo", "in_progress", "done" ]
                         )
-                    , button [ class "ecc-btn ecc-btn--inline", type_ "button", onClick OpenedAddTask ] [ text "Add task" ]
+                    , button [ class "ecc-btn ecc-btn--inline", type_ "button", Attr.disabled (not (Update.Access.canCreate model))
+                        , onClick OpenedAddTask ] [ text "Add task" ]
                     ]
                 , if List.isEmpty data.items then
                     div [ class "content__empty-block" ] [ text "No tasks match. Add one to track follow-ups." ]
@@ -167,6 +170,7 @@ taskRow model task =
             [ button
                 [ type_ "button"
                 , class (taskStatusClass task.status)
+                , Attr.disabled (not task.editable)
                 , onClick
                     (ToggledTaskStatus task
                         (case task.status of
@@ -195,8 +199,10 @@ taskRow model task =
             ]
         , td [] [ contactLinkForTask model task ]
         , td [ class "cell-actions" ]
-            [ button [ type_ "button", class "row-action", onClick (OpenedEditTask task), Attr.attribute "aria-label" "Edit" ] [ iconEdit ]
-            , button [ type_ "button", class "row-action row-action--danger", onClick (RequestedDeleteTask task), Attr.attribute "aria-label" "Delete" ] [ iconTrash ]
+            [ button [ type_ "button", class "row-action", Attr.disabled (not task.editable)
+            , onClick (OpenedEditTask task), Attr.attribute "aria-label" "Edit" ] [ iconEdit ]
+            , button [ type_ "button", class "row-action row-action--danger", Attr.disabled (not task.editable)
+            , onClick (RequestedDeleteTask task), Attr.attribute "aria-label" "Delete" ] [ iconTrash ]
             ]
         ]
 
@@ -285,7 +291,7 @@ taskFormModal model tf =
 
               else
                 form [ onSubmit SubmittedTaskForm, Attr.novalidate True ]
-                    [ Html.node "crm-draft-recovery" [] []
+                    [ View.Drafts.view model
                     , case taskFormFieldError "form" tf of
                         Just msg ->
                             div [ class "ecc-alert ecc-alert--error" ] [ text msg ]

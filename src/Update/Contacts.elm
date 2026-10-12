@@ -324,7 +324,7 @@ update msg model =
         ConfirmedDeleteContact ->
             case ( model.deletingContact, model.token ) of
                 ( Just contact, Just token ) ->
-                    ( model, Api.deleteContact token contact.id GotDeletedContact )
+                    ( model, Api.deleteContact token contact.id contact.revision GotDeletedContact )
 
                 _ ->
                     ( model, Cmd.none )

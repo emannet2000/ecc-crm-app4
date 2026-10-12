@@ -248,7 +248,7 @@ update msg model =
         ConfirmedDeleteAgent ->
             case ( model.deletingAgent, model.token ) of
                 ( Just agent, Just token ) ->
-                    ( model, Api.deleteAgent token agent.id GotDeletedAgent )
+                    ( model, Api.deleteAgent token agent.id agent.revision GotDeletedAgent )
 
                 _ ->
                     ( model, Cmd.none )

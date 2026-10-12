@@ -64,7 +64,7 @@ func BenchmarkRecordReads(b *testing.B) {
 // 5,000 clients/applications plus another workspace. This is a local baseline,
 // not a declaration of production throughput or multi-process safety.
 func BenchmarkRepositoryWorkload(b *testing.B) {
-	for _, mode := range []string{"paged-list", "search", "application-load", "application-requirements", "dashboard-reports", "daily-work", "workspace-priorities", "operations-attention", "validated-write"} {
+	for _, mode := range []string{"paged-list", "deals-board", "search", "application-load", "application-requirements", "dashboard-reports", "daily-work", "workspace-priorities", "operations-attention", "validated-write"} {
 		b.Run(mode, func(b *testing.B) {
 			jwtSecret = []byte("benchmark-only-secret")
 			b.Setenv("LEGACY_DATA_FILE", "")
@@ -83,6 +83,9 @@ func BenchmarkRepositoryWorkload(b *testing.B) {
 					s = foreign
 				}
 				id := fmt.Sprintf("workload-%05d", i)
+				if mode == "deals-board" {
+					deals = append(deals, Deal{RecordScope: s, ID: "deal-" + id, Title: "Workload deal", Stage: "Qualified", Value: 100, Currency: "USD", Owner: u.Name})
+				}
 				contacts = append(contacts, Contact{RecordScope: s, ID: id, Name: "Workload client", Email: fmt.Sprintf("client-%d@example.com", i), Stage: "Lead"})
 				cases = append(cases, Case{RecordScope: s, ID: "case-" + id, ClientID: id, CaseNumber: "APP-" + id, AssignedOfficer: u.Name, CurrentStage: "Documents Pending", NextAction: "Review passport", NextDeadline: "2026-10-15"})
 				documents = append(documents, Document{RecordScope: s, ID: "doc-" + id, CaseID: "case-" + id, DocName: "Passport", Required: true, Status: "Requested"})
@@ -101,6 +104,8 @@ func BenchmarkRepositoryWorkload(b *testing.B) {
 			for i := 0; i < b.N; i++ {
 				method, path, body := "GET", "/api/contacts?limit=25&offset=500&sort=name", ""
 				switch mode {
+				case "deals-board":
+					path = "/api/deals?board=page&limit=50"
 				case "search":
 					path = "/api/search?q=client-123"
 				case "application-load":

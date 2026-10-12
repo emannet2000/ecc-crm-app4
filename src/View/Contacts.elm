@@ -3,6 +3,7 @@ module View.Contacts exposing (contactById, contactList, contactsView, stageBadg
 {-| Contacts list page.
 -}
 
+import Update.Access
 import Html exposing (..)
 import Html.Attributes as Attr exposing (class, disabled, id, placeholder, type_, value)
 import Html.Events exposing (onClick, onInput)
@@ -74,6 +75,7 @@ contactRow c =
                 , type_ "button"
                 , Attr.title "Edit"
                 , Attr.attribute "aria-label" ("Edit " ++ c.name)
+                , Attr.disabled (not c.editable)
                 , Html.Events.stopPropagationOn "click"
                     (D.succeed ( OpenedEditContact c, True ))
                 ]
@@ -83,6 +85,7 @@ contactRow c =
                 , type_ "button"
                 , Attr.title "Delete"
                 , Attr.attribute "aria-label" ("Delete " ++ c.name)
+                , Attr.disabled (not c.editable)
                 , Html.Events.stopPropagationOn "click"
                     (D.succeed ( RequestedDeleteContact c, True ))
                 ]
@@ -164,6 +167,7 @@ contactsView model =
                     , button
                         [ class "ecc-btn ecc-btn--inline"
                         , type_ "button"
+                        , Attr.disabled (not (Update.Access.canCreate model))
                         , onClick OpenedAddContact
                         ]
                         [ text "Add contact" ]
@@ -215,7 +219,8 @@ contactsView model =
                                 [ button
                                     [ class "ecc-btn ecc-btn--inline"
                                     , type_ "button"
-                                    , onClick OpenedAddContact
+                                    , Attr.disabled (not (Update.Access.canCreate model))
+                        , onClick OpenedAddContact
                                     ]
                                     [ text "Add your first contact" ]
                                 ]

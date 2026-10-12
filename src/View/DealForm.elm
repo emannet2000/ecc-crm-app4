@@ -3,6 +3,7 @@ module View.DealForm exposing (bulkDeleteConfirmModal, bulkMoveConfirmModal, con
 {-| Deal create/edit form, confirmations, bulk actions.
 -}
 
+import View.Drafts
 import Html exposing (..)
 import Html.Attributes as Attr exposing (class, disabled, for, id, placeholder, type_, value)
 import Html.Events exposing (onClick, onInput, onSubmit)
@@ -244,7 +245,7 @@ dealFormView model df isEdit =
                 "Save deal"
     in
     form [ onSubmit SubmittedDealForm, Attr.novalidate True ]
-        [ Html.node "crm-draft-recovery" [] []
+        [ View.Drafts.view model
         , case formError of
             Just msg ->
                 div [ class "ecc-alert ecc-alert--error" ] [ text msg ]

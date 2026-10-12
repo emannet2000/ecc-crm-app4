@@ -29,7 +29,9 @@ func handleChatPeople(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "Search must be at most 200 characters")
 		return
 	}
-	rows, err := storeDB(r).Query(`SELECT u.id,u.name,u.role,(SELECT count(*) FROM team_messages m WHERE m.org_id=? AND m.sender_id=u.id AND m.recipient_id=? AND m.read_at='') FROM users u WHERE u.org_id=? AND u.disabled=0 AND u.id<>? AND instr(lower(u.name),lower(?))>0 ORDER BY u.name,u.id LIMIT 200 OFFSET ?`, u.OrgID, u.ID, u.OrgID, u.ID, query, offset)
+	rows, err := storeDB(r).Query(`SELECT u.id,u.name,u.role,(SELECT count(*) FROM team_messages m WHERE m.org_id=? AND m.sender_id=u.id AND m.recipient_id=? AND m.read_at=''),
+        COALESCE((SELECT substr(body,1,140) FROM team_messages m WHERE m.org_id=u.org_id AND ((m.sender_id=u.id AND m.recipient_id=?) OR (m.sender_id=? AND m.recipient_id=u.id)) ORDER BY seq DESC LIMIT 1),''),
+        COALESCE((SELECT created_at FROM team_messages m WHERE m.org_id=u.org_id AND ((m.sender_id=u.id AND m.recipient_id=?) OR (m.sender_id=? AND m.recipient_id=u.id)) ORDER BY seq DESC LIMIT 1),'') FROM users u WHERE u.org_id=? AND u.disabled=0 AND u.id<>? AND instr(lower(u.name),lower(?))>0 ORDER BY u.name,u.id LIMIT 200 OFFSET ?`, u.OrgID, u.ID, u.ID, u.ID, u.ID, u.ID, u.OrgID, u.ID, query, offset)
 	if err != nil {
 		writeError(w, 500, "Unable to load colleagues")
 		return
@@ -37,13 +39,13 @@ func handleChatPeople(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 	people := []map[string]any{}
 	for rows.Next() {
-		var id, name, role string
+		var id, name, role, lastMessage, lastMessageAt string
 		var unread int
-		if rows.Scan(&id, &name, &role, &unread) != nil {
+		if rows.Scan(&id, &name, &role, &unread, &lastMessage, &lastMessageAt) != nil {
 			writeError(w, 500, "Unable to load colleagues")
 			return
 		}
-		people = append(people, map[string]any{"id": id, "name": name, "role": role, "unread": unread})
+		people = append(people, map[string]any{"id": id, "name": name, "role": role, "unread": unread, "lastMessage": lastMessage, "lastMessageAt": lastMessageAt})
 	}
 	if rows.Err() != nil {
 		writeError(w, 500, "Unable to load colleagues")
@@ -114,7 +116,7 @@ func handleTeamChat(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	rows, err := storeDB(r).Query(`SELECT seq,sender_id,body,created_at FROM team_messages WHERE org_id=? AND seq<? AND ((sender_id=? AND recipient_id=?) OR (sender_id=? AND recipient_id=?)) ORDER BY seq DESC LIMIT 100`, u.OrgID, before, u.ID, peer, peer, u.ID)
+	rows, err := storeDB(r).Query(`SELECT seq,sender_id,body,created_at,read_at FROM team_messages WHERE org_id=? AND seq<? AND ((sender_id=? AND recipient_id=?) OR (sender_id=? AND recipient_id=?)) ORDER BY seq DESC LIMIT 100`, u.OrgID, before, u.ID, peer, peer, u.ID)
 	if err != nil {
 		writeError(w, 500, "Unable to load messages")
 		return
@@ -123,12 +125,12 @@ func handleTeamChat(w http.ResponseWriter, r *http.Request) {
 	messages := []map[string]any{}
 	for rows.Next() {
 		var seq int64
-		var sender, body, at string
-		if rows.Scan(&seq, &sender, &body, &at) != nil {
+		var sender, body, at, readAt string
+		if rows.Scan(&seq, &sender, &body, &at, &readAt) != nil {
 			writeError(w, 500, "Unable to load messages")
 			return
 		}
-		messages = append(messages, map[string]any{"id": seq, "senderId": sender, "body": body, "createdAt": at})
+		messages = append(messages, map[string]any{"id": seq, "senderId": sender, "body": body, "createdAt": at, "readAt": readAt})
 	}
 	if rows.Err() != nil {
 		writeError(w, 500, "Unable to load messages")

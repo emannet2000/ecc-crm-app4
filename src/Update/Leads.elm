@@ -275,7 +275,7 @@ update msg model =
         ConfirmedDeleteLead ->
             case ( model.deletingLead, model.token ) of
                 ( Just lead, Just token ) ->
-                    ( model, Api.deleteLead token lead.id GotDeletedLead )
+                    ( model, Api.deleteLead token lead.id lead.revision GotDeletedLead )
 
                 _ ->
                     ( model, Cmd.none )

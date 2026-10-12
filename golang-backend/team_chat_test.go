@@ -25,8 +25,9 @@ func TestTeamChatPrivacyRetryAndReadStatus(t *testing.T) {
 	w := rawUserRequest(t, h, b, "GET", "/api/team-chat/"+a.ID, nil)
 	assertStatus(t, w, 200)
 	var messages []struct {
-		ID   int64
-		Body string
+		ID     int64
+		Body   string
+		ReadAt string
 	}
 	if json.Unmarshal(w.Body.Bytes(), &messages) != nil || len(messages) != 1 || messages[0].Body != "<script>plain text</script>" {
 		t.Fatal(w.Body.String())
@@ -42,14 +43,15 @@ func TestTeamChatPrivacyRetryAndReadStatus(t *testing.T) {
 	w = rawUserRequest(t, h, b, "GET", "/api/team-chat/people", nil)
 	assertStatus(t, w, 200)
 	var people []struct {
-		ID     string
-		Unread int
+		ID          string
+		Unread      int
+		LastMessage string
 	}
 	if json.Unmarshal(w.Body.Bytes(), &people) != nil {
 		t.Fatal(w.Body.String())
 	}
 	for _, p := range people {
-		if p.ID == a.ID && p.Unread != 1 {
+		if p.ID == a.ID && (p.Unread != 1 || p.LastMessage != "<script>plain text</script>") {
 			t.Fatal("unread count missing")
 		}
 		if p.ID == foreign.ID {
@@ -61,6 +63,22 @@ func TestTeamChatPrivacyRetryAndReadStatus(t *testing.T) {
 	if err := database.QueryRow(`SELECT count(*) FROM team_messages WHERE recipient_id=? AND read_at=''`, b.ID).Scan(&unread); err != nil || unread != 0 {
 		t.Fatalf("read status: %d %v", unread, err)
 	}
+	w = rawUserRequest(t, h, a, "GET", path, nil)
+	assertStatus(t, w, 200)
+	if err := json.Unmarshal(w.Body.Bytes(), &messages); err != nil || len(messages) != 1 || messages[0].ReadAt == "" {
+		t.Fatal("sender did not receive confirmed read status", w.Body.String())
+	}
+	w = rawUserRequest(t, h, admin, "GET", "/api/team-chat/people", nil)
+	assertStatus(t, w, 200)
+	if err := json.Unmarshal(w.Body.Bytes(), &people); err != nil {
+		t.Fatal(err)
+	}
+	for _, person := range people {
+		if person.LastMessage != "" {
+			t.Fatal("conversation preview exposed to administrator", w.Body.String())
+		}
+	}
+
 	send["body"] = strings.Repeat("x", 4001)
 	assertStatus(t, rawUserRequest(t, h, a, "POST", path, send), 400)
 	if _, err := database.Exec(`UPDATE users SET disabled=1 WHERE id=?`, b.ID); err != nil {

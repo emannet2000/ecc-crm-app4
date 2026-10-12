@@ -3,6 +3,7 @@ module View.ContactForm exposing (contactFormModal, deleteConfirmModal)
 {-| Contact create/edit modal and delete confirmation.
 -}
 
+import View.Drafts
 import Html exposing (..)
 import Html.Attributes as Attr exposing (class, disabled, for, id, placeholder, type_, value)
 import Html.Events exposing (onClick, onInput, onSubmit)
@@ -204,8 +205,8 @@ discardConfirmView =
         ]
 
 
-contactFormView : ContactForm -> Bool -> Html Msg
-contactFormView cf isEdit =
+contactFormView : Model -> ContactForm -> Bool -> Html Msg
+contactFormView model cf isEdit =
     let
         formError =
             contactFormFieldError "form" cf
@@ -221,7 +222,7 @@ contactFormView cf isEdit =
                 "Save contact"
     in
     form [ onSubmit SubmittedContactForm, Attr.novalidate True ]
-        [ Html.node "crm-draft-recovery" [] []
+        [ View.Drafts.view model
         , case formError of
             Just msg ->
                 div [ class "ecc-alert ecc-alert--error" ]
@@ -308,7 +309,7 @@ contactFormModal model cf =
                 discardConfirmView
 
               else
-                contactFormView cf isEdit
+                contactFormView model cf isEdit
             ]
         ]
 

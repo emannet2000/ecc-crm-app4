@@ -43,12 +43,23 @@
   class RecordTools extends HTMLElement {
     static get observedAttributes() { return ['entity', 'record-id']; }
     constructor() { super(); this.attachShadow({mode: 'open'}); this.generation = 0; }
-    connectedCallback() { this.mount(); }
-    attributeChangedCallback() { if (this.isConnected) this.mount(); }
-    disconnectedCallback() { this.generation++; this.stop?.(); }
+    connectedCallback() {
+      this.lazyOwner = this.hasAttribute('lazy') ? this.closest('details') : null;
+      this.lazyOpened = () => { if (this.lazyOwner.open && !this.stop) this.mount(); };
+      this.lazyOwner?.addEventListener('toggle', this.lazyOpened);
+      this.mount();
+    }
+    attributeChangedCallback() {
+      if (!this.isConnected) return;
+      this.generation++; this.stop?.(); this.stop = null;
+      this.shadowRoot.replaceChildren(); this.mount();
+    }
+    disconnectedCallback() { this.generation++; this.stop?.(); this.stop = null; this.lazyOwner?.removeEventListener('toggle', this.lazyOpened); }
+    hasUnsavedChanges() { return !!this.shadowRoot.querySelector('form[data-dirty="true"]'); }
     async mount() {
+      if (this.hasAttribute('lazy') && this.closest('details')?.open === false) return;
       const generation = ++this.generation;
-      this.stop?.(); this.shadowRoot.replaceChildren(); shell(this.shadowRoot);
+      this.stop?.(); this.stop = null; this.shadowRoot.replaceChildren(); shell(this.shadowRoot);
       const entity = this.getAttribute('entity'), id = this.getAttribute('record-id');
       const main = this.shadowRoot.querySelector('#content');
       try {
@@ -70,7 +81,7 @@
         }
         const relatedClient=entity==='contacts'?id:detail.record.clientId||detail.record.contactId||detail.record.convertedContactId;
         if(relatedClient){const links=node('nav',null,{class:'links','aria-label':'Related client'});links.append(node('a','Client profile and history',{href:'/contacts/'+encodeURIComponent(relatedClient)+'#record-tools?tab=history'}));this.shadowRoot.querySelector('#tabs').before(links)}
-        this.stop = window.mountWorkspaceTools(this.shadowRoot, {entity, id, editable: detail.editable, tab: tabs[entity]});
+        this.stop = window.mountWorkspaceTools(this.shadowRoot, {entity, id, editable: detail.editable, tab: this.getAttribute('initial-tab') || tabs[entity]});
       } catch (error) {
         if (generation === this.generation) main.replaceChildren(node('p', error.message));
       }
@@ -418,7 +429,7 @@
   document.addEventListener('click', event => {
     const link=event.target.closest('a[href^="#record-tools?"]');
     if(!link)return;
-    const host=document.querySelector('crm-record-tools');if(!host)return;
+    const host=document.querySelector('crm-client-workspace') || document.querySelector('crm-record-tools');if(!host)return;
     event.preventDefault();event.stopPropagation();
     const params=new URLSearchParams(link.getAttribute('href').split('?')[1]);
     const tab=params.get('tab');

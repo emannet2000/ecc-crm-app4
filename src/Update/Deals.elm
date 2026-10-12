@@ -4,6 +4,7 @@ module Update.Deals exposing (update)
 -}
 
 import Api
+import Dict
 import Set
 import Types exposing (..)
 import Update.Loaders exposing (loadDeals, pageSize)
@@ -14,13 +15,16 @@ import Update.Validate exposing (validateDealForm)
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        UpdatedDealStageFilter stage ->
+            ( { model | dealStageFilter = stage }, Cmd.none )
+
         RefreshDeals ->
             loadDeals { model | dealsRequestId = model.dealsRequestId + 1, pendingDealsQuery = Nothing, selectedDeals = Set.empty }
 
         LoadMoreDeals ->
             case ( model.token, model.deals ) of
                 ( Just token, Success data ) ->
-                    if data.loadingMore || model.pendingDealsQuery /= Nothing || List.length data.items >= data.total then
+                    if model.dealsRefreshing || data.loadingMore || model.pendingDealsQuery /= Nothing || List.length data.items >= data.total then
                         ( model, Cmd.none )
 
                     else
@@ -47,7 +51,7 @@ update msg model =
                                     _ ->
                                         data.items
                         in
-                        ( { model | deals = Success { data | items = items, query = query, loadingMore = False } }, Cmd.none )
+                        ( { model | dealsRefreshing = False, deals = Success { data | items = items, query = query, loadingMore = False } }, Cmd.none )
 
                     Err message ->
                         if append then
@@ -59,7 +63,10 @@ update msg model =
                                     ( model, Cmd.none )
 
                         else
-                            ( { model | deals = Failure message }, Cmd.none )
+                            ( { model | dealsRefreshing = False, deals = case model.deals of
+                                    Success old -> Success { old | loadingMore = False }
+                                    _ -> Failure message
+                              , toast = Just message }, Cmd.none )
 
         GotDeals result ->
             case result of
@@ -67,7 +74,10 @@ update msg model =
                     ( { model | deals = Success data }, Cmd.none )
 
                 Err message ->
-                    ( { model | deals = Failure message }, Cmd.none )
+                    ( { model | dealsRefreshing = False, deals = case model.deals of
+                                    Success old -> Success { old | loadingMore = False }
+                                    _ -> Failure message
+                              , toast = Just message }, Cmd.none )
 
         UpdatedDealsQuery q ->
             let
@@ -86,7 +96,7 @@ update msg model =
         FlushDealsSearch ->
             case ( model.token, model.pendingDealsQuery ) of
                 ( Just t, Just q ) ->
-                    ( { model | pendingDealsQuery = Nothing }
+                    ( { model | pendingDealsQuery = Nothing, dealsRefreshing = True }
                     , Api.fetchDeals t q model.ownerFilter model.dateFromFilter model.dateToFilter "" 50 0 (GotDealsAt model.dealsRequestId q False)
                     )
 
@@ -269,7 +279,7 @@ update msg model =
                                 , toast = Just (verb ++ deal.title)
                             }
                     in
-                    ( freshModel, Tuple.second (loadDeals freshModel) )
+                    loadDeals { freshModel | dealsRequestId = freshModel.dealsRequestId + 1 }
 
                 Err (FieldErrors fields) ->
                     case model.dealForm of
@@ -305,7 +315,7 @@ update msg model =
             case model.token of
                 Just token ->
                     ( { model | movingDealId = Just deal.id }
-                    , Api.updateDealStage token deal.id newStage GotMovedDeal
+                    , Api.updateDealStage token deal.id deal.revision newStage GotMovedDeal
                     )
 
                 Nothing ->
@@ -328,7 +338,7 @@ update msg model =
                                 , toast = Just (deal.title ++ " moved to " ++ deal.stage)
                             }
                     in
-                    ( freshModel, Tuple.second (loadDeals freshModel) )
+                    loadDeals { freshModel | dealsRequestId = freshModel.dealsRequestId + 1 }
 
                 Err err ->
                     let
@@ -351,7 +361,7 @@ update msg model =
         ConfirmedDeleteDeal ->
             case ( model.deletingDeal, model.token ) of
                 ( Just deal, Just token ) ->
-                    ( model, Api.deleteDeal token deal.id GotDeletedDeal )
+                    ( model, Api.deleteDeal token deal.id deal.revision GotDeletedDeal )
 
                 _ ->
                     ( model, Cmd.none )
@@ -396,7 +406,7 @@ update msg model =
                                 , toast = Just ("Deleted " ++ name)
                             }
                     in
-                    ( freshModel, Tuple.second (loadDeals freshModel) )
+                    loadDeals { freshModel | dealsRequestId = freshModel.dealsRequestId + 1 }
 
                 Err message ->
                     ( { model
@@ -428,7 +438,7 @@ update msg model =
                 ( Just dealId, Just token, Success dealsData ) ->
                     case List.filter (\d -> d.id == dealId) dealsData.items |> List.head of
                         Just deal ->
-                            if deal.stage == stageName then
+                            if deal.stage == stageName || not deal.editable then
                                 ( { model
                                     | draggingDealId = Nothing
                                     , dropTargetStage = Nothing
@@ -442,7 +452,7 @@ update msg model =
                                     , dropTargetStage = Nothing
                                     , movingDealId = Just dealId
                                   }
-                                , Api.updateDealStage token dealId stageName GotMovedDeal
+                                , Api.updateDealStage token dealId deal.revision stageName GotMovedDeal
                                 )
 
                         Nothing ->
@@ -498,7 +508,8 @@ update msg model =
 
         RequestedBulkMove stageName ->
             ( { model
-                | bulkMoveStage =
+                | bulkDealRevisions = if model.bulkMoveStage == Nothing then Dict.fromList (selectedDealRevisions model) else model.bulkDealRevisions
+                , bulkMoveStage =
                     Just
                         (if String.isEmpty stageName then
                             "Qualified"
@@ -522,17 +533,17 @@ update msg model =
                     else
                         let
                             ids =
-                                Set.toList model.selectedDeals
+                                Dict.keys model.bulkDealRevisions
                         in
                         ( { model | bulkMoveStage = Nothing }
-                        , Api.bulkMoveDeals token ids stageName (GotBulkMoved ids)
+                        , Api.bulkMoveDeals token ids (Dict.toList model.bulkDealRevisions) stageName (GotBulkMoved ids)
                         )
 
                 _ ->
                     ( { model | bulkMoveStage = Nothing }, Cmd.none )
 
         RequestedBulkDelete ->
-            ( { model | bulkDeleteConfirm = True }, Cmd.none )
+            ( { model | bulkDeleteConfirm = True, bulkDealRevisions = Dict.fromList (selectedDealRevisions model) }, Cmd.none )
 
         CancelledBulkDelete ->
             ( { model | bulkDeleteConfirm = False }, Cmd.none )
@@ -542,10 +553,10 @@ update msg model =
                 Just token ->
                     let
                         ids =
-                            Set.toList model.selectedDeals
+                            Dict.keys model.bulkDealRevisions
                     in
                     ( { model | bulkDeleteConfirm = False }
-                    , Api.bulkDeleteDeals token ids (GotBulkDeleted ids)
+                    , Api.bulkDeleteDeals token ids (Dict.toList model.bulkDealRevisions) (GotBulkDeleted ids)
                     )
 
                 Nothing ->
@@ -579,7 +590,7 @@ update msg model =
                         , toast = Just msgText
                     }
             in
-            ( freshModel, Tuple.second (loadDeals freshModel) )
+            loadDeals { freshModel | dealsRequestId = freshModel.dealsRequestId + 1 }
 
         GotBulkDeleted ids result ->
             let
@@ -608,7 +619,18 @@ update msg model =
                         , toast = Just msgText
                     }
             in
-            ( freshModel, Tuple.second (loadDeals freshModel) )
+            loadDeals { freshModel | dealsRequestId = freshModel.dealsRequestId + 1 }
 
         _ ->
             ( model, Cmd.none )
+
+
+selectedDealRevisions : Model -> List ( String, String )
+selectedDealRevisions model =
+    let
+        records = case model.deals of
+            Success data -> data.items
+            _ -> []
+    in
+    Set.toList model.selectedDeals
+        |> List.map (\id -> ( id, List.filter (\record -> record.id == id) records |> List.head |> Maybe.map .revision |> Maybe.withDefault "" ))

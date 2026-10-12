@@ -251,7 +251,7 @@ update msg model =
         ConfirmedDeleteSchool ->
             case ( model.deletingSchool, model.token ) of
                 ( Just school, Just token ) ->
-                    ( model, Api.deleteSchool token school.id GotDeletedSchool )
+                    ( model, Api.deleteSchool token school.id school.revision GotDeletedSchool )
 
                 _ ->
                     ( model, Cmd.none )

@@ -23,8 +23,10 @@ svgPath d =
 
 onCheck : (Bool -> msg) -> Html.Attribute msg
 onCheck toMsg =
-    Html.Events.on "change"
-        (D.map toMsg (D.at [ "target", "checked" ] D.bool))
+    -- Modal click handlers render synchronously. Consume the checkbox click
+    -- before its parent can reset the checked property ahead of `change`.
+    Html.Events.stopPropagationOn "click"
+        (D.map (\checkedValue -> ( toMsg checkedValue, True )) (D.at [ "target", "checked" ] D.bool))
 
 
 onEnter : msg -> Html.Attribute msg
@@ -133,6 +135,9 @@ formField model cfg =
             , Attr.attribute "autocomplete" cfg.autocomplete
             , Attr.attribute "autocapitalize" (if cfg.fieldKey == NameField then "words" else "none")
             , Attr.attribute "enterkeyhint" (if isPassword then "go" else "next")
+            , Attr.attribute "spellcheck" (if cfg.fieldKey == NameField then "true" else "false")
+            , Attr.attribute "aria-invalid" (if err == Nothing then "false" else "true")
+            , Attr.attribute "aria-describedby" (if err == Nothing then "" else cfg.id ++ "-error")
             , value val
             , onInput (UpdatedField cfg.fieldKey)
             ]
@@ -194,7 +199,7 @@ formField model cfg =
                )
             ++ (case err of
                     Just msg ->
-                        [ p [ class "ecc-field__message" ] [ text msg ] ]
+                        [ p [ class "ecc-field__message", id (cfg.id ++ "-error") ] [ text msg ] ]
 
                     Nothing ->
                         []

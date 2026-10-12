@@ -302,7 +302,7 @@ update msg model =
         ConfirmedDeleteStudent ->
             case ( model.deletingStudent, model.token ) of
                 ( Just student, Just token ) ->
-                    ( model, Api.deleteStudent token student.id GotDeletedStudent )
+                    ( model, Api.deleteStudent token student.id student.revision GotDeletedStudent )
 
                 _ ->
                     ( model, Cmd.none )

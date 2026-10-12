@@ -57,3 +57,37 @@ crm-work-plan{display:block} .tools form>label{display:grid;gap:6px;margin:12px 
 .work-item > a.button { display:inline-flex; min-height:44px; align-items:center; }
 
 .tools nav.links { display:flex; flex-wrap:wrap; gap:12px; }
+/* The client identity and selected application stay visible across work tabs. */
+.client-workspace__content { min-width:0; }
+.client-workspace > header { margin-bottom:10px; gap:12px; }
+.client-workspace > header h1 { font-size:24px; margin:0; overflow-wrap:anywhere; }
+.client-workspace > nav { display:flex; flex-wrap:wrap; gap:6px; overflow:visible; padding-bottom:8px; margin:0; }
+.client-workspace > nav button { min-height:44px; padding:8px 10px; font-size:13px; }
+.client-workspace > nav button[aria-pressed=true] { background:var(--primary); color:var(--on-primary,#fff); border-color:var(--primary); }
+.client-workspace__picker { display:grid; gap:4px; margin:10px 0; font-size:12px; font-weight:600; }
+.client-workspace__picker select { width:100%; min-height:44px; padding:8px; font:inherit; background:var(--panel,#fff); color:inherit; border:1px solid var(--border,#bbc5d3); border-radius:10px; }
+.client-workspace__summary { display:flex; flex-wrap:wrap; align-items:center; gap:6px 12px; padding:8px 12px; margin:0 0 10px; }
+.client-workspace__summary p { margin:0; font-size:12px; }
+.client-workspace__summary button { margin-left:auto; min-height:44px; padding:8px; font-size:12px; }
+.client-workspace__attention { padding:10px 12px; margin-bottom:10px; border-left:4px solid var(--primary); background:var(--panel,#fff); border-radius:8px; }
+.client-workspace__attention p { margin:4px 0; }
+.client-workspace__attention button { display:block; margin-top:6px; min-height:44px; }
+.client-workspace crm-work-plan { scroll-margin-top:12px; }
+@media(max-width:600px) {
+ .tools.client-workspace { padding:8px 0; }
+ .client-workspace > nav { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); }
+ .client-workspace > nav button { grid-column:span 2; width:100%; min-width:0; padding:8px 3px; }
+ .client-workspace > nav button:nth-child(n+4) { grid-column:span 3; }
+ .client-workspace__picker select { font-size:16px; }
+ .client-workspace__summary { padding:6px 10px; }
+}
+
+.client-workspace__summary { display:grid; grid-template-columns:minmax(0,1fr) auto; }
+.client-workspace__summary p { grid-column:1; }
+.client-workspace__summary button { grid-column:2; grid-row:1 / span 2; }
+.client-workspace__summary button + button { grid-row:auto; }
+:host([compact]) .tools { padding:10px 0; }
+:host([compact]) .tools > h2 { margin-bottom:6px; }
+:host([compact]) .tools > p { margin:4px 0; }
+:host([compact]) .tools > form > p:first-child { display:none; }
+:host([compact]) .tools form > label { margin:8px 0; }

@@ -16,8 +16,15 @@ in SQLite and included in the existing database backups. Unread counts appear
 in the colleague list, which supports search and pagination. Message history
 loads 100 messages at a time. Active conversations poll every five seconds while
 the document is visible. Sending uses an idempotent client identifier; network
-failures retain the draft for retry. Drafts survive in-app navigation in memory,
-but are not persisted across browser reloads. This release does not add client
+failures retain the draft for retry. Drafts and pending send identifiers survive navigation and reloads in session
+storage, scoped to the current user and colleague. Text typed while another
+message is sending remains a draft. Sent indicates server acceptance; Read
+reflects the recipient’s recorded read status. History reading preserves scroll
+position, and a retry button appears when messages cannot load. Polls do not
+overlap for the same request, stop when disconnected, and resume when visible
+or back online. Requests time out and refresh expired sessions before retrying.
+The interface includes colleague previews, date separators, keyboard sending
+on desktop, and a composer fitted above phone navigation and the keyboard. This release does not add client
 chat, group chat, attachments or push notifications.
 
 Reports at `/reports` present a timestamped account-scoped snapshot, financial

@@ -303,7 +303,7 @@ func scopedHandler(next http.HandlerFunc, w http.ResponseWriter, r *http.Request
 	}
 	state.mu.Unlock()
 	defer func() { state.mu.Lock(); state.hiddenLedgerPayments = nil; state.mu.Unlock() }()
-	response := &bufferedResponse{header: make(http.Header)}
+	response := &bufferedResponse{header: make(http.Header), user: &user}
 	next(response, r)
 	if response.status == 0 {
 		response.status = 200

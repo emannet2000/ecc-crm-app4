@@ -31,12 +31,12 @@ brandPanel =
                 ]
             , div [ class "brand-panel__hero" ]
                 [ h2 [ class "brand-panel__headline" ]
-                    [ text "Customer relationships, "
+                    [ text "Client applications, "
                     , span [ class "brand-panel__headline-accent" ]
-                        [ text "secured." ]
+                        [ text "organized." ]
                     ]
                 , p [ class "brand-panel__lede" ]
-                    [ text "The unified workspace for your team to manage accounts, deals, and conversations — with access controls and an auditable history." ]
+                    [ text "Manage client inquiries, application progress, documents, and payments in one workspace." ]
                 ]
             , ul [ class "trust-list" ]
                 [ trustItem "Organization and role permissions"
@@ -102,7 +102,7 @@ loginCard model =
 
         switchLabel =
             if model.mode == Login then
-                "Request access"
+                "Create account"
 
             else
                 "Sign in instead"
@@ -125,7 +125,7 @@ loginCard model =
                 , p [ class "auth-subtitle" ] [ text subtitleText ]
                 ]
             , alertView model.alert
-            , form [ onSubmit Submitted, Attr.novalidate True ]
+            , form [ class "auth-form", onSubmit Submitted, Attr.novalidate True, Attr.attribute "aria-busy" (if model.submitting then "true" else "false") ]
                 ((if model.mode == Register then
                     [ formField model
                         { id = "name"
@@ -180,8 +180,8 @@ loginCard model =
                                         "Use at least 12 characters"
                                     )
                                 ]
-                       , div [ class "ecc-row" ]
-                            [ label [ class "ecc-checkbox" ]
+                       , div [ class "ecc-row auth-options" ]
+                            ([ label [ class "ecc-checkbox" ]
                                 [ input
                                     [ type_ "checkbox"
                                     , checked model.form.remember
@@ -191,6 +191,12 @@ loginCard model =
                                 , span [] [ text "Keep me signed in" ]
                                 ]
                             ]
+                            ++ (if model.mode == Login then
+                                    [ a [ class "auth-forgot", Attr.href "/account/forgot" ] [ text "Forgot password?" ] ]
+
+                                else
+                                    []
+                               ))
                        , button
                             [ class "ecc-btn"
                             , type_ "submit"
@@ -215,8 +221,7 @@ loginCard model =
                 )
             , if model.mode == Login then
                 div [ class "auth-alternatives" ]
-                    [ a [ Attr.href "/account/forgot" ] [ text "Forgot password?" ]
-                    , a [ Attr.href "/api/sso/start" ] [ text "Sign in with your organization" ]
+                    [ a [ Attr.href "/api/sso/start" ] [ text "Sign in with your organization" ]
                     ]
 
               else

@@ -5,16 +5,59 @@ module Update.Navigation exposing (update)
 
 import Api
 import Browser
+import Dict
+import Json.Decode as D
+import Update.Access
+import Update.Drafts
 import Browser.Navigation as Nav
 import Router exposing (parseRoute, routeToPath)
 import Types exposing (..)
 import Update.Loaders exposing (fetchForAgentRoute, fetchForCaseRoute, fetchForContactRoute, fetchForDealRoute, fetchForInvoiceRoute, fetchForLeadRoute, fetchForPartnerRoute, fetchForSchoolRoute, fetchForStudentRoute, loadActivities, loadAgents, loadCaseDocuments, loadCases, loadContacts, loadDeals, loadInvoicePayments, loadInvoices, loadLeads, loadPartners, loadSchools, loadStudentDossier, loadStudents, loadTasks)
 import Url
+import Task
 
 
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
+        RequestedWorkspaceApplication entity id ->
+            if Update.Drafts.hasOpen model || not (Update.Access.canCreate model) then
+                ( { model | toast = Just "Close the current form before adding an application, and check that you have editing access." }, Cmd.none )
+            else if entity == "contacts" || entity == "students" then
+                let
+                    form = emptyCaseForm
+                in
+                ( { model | caseForm = Just { form | clientId = if entity == "contacts" then id else "", studentId = if entity == "students" then id else "" }, editingCaseId = Nothing, toast = Nothing }, Cmd.none )
+            else
+                ( model, Cmd.none )
+
+        RequestedWorkspaceInvoice entity id ->
+            if Update.Drafts.hasOpen model || not (Update.Access.canCreate model) then
+                ( { model | toast = Just "Close the current form before adding an invoice, and check that you have editing access." }, Cmd.none )
+            else if entity == "cases" || entity == "contacts" then
+                let
+                    form = emptyInvoiceForm
+                in
+                ( { model | invoiceForm = Just { form | caseId = if entity == "cases" then id else "", clientId = if entity == "contacts" then id else "" }, editingInvoiceId = Nothing, toast = Nothing }, Cmd.none )
+            else
+                ( model, Cmd.none )
+
+        RequestedWorkspaceEdit entity id ->
+            if Update.Drafts.hasOpen model then
+                ( { model | toast = Just "Save or close the current form before editing another record." }, Cmd.none )
+            else requestWorkspaceEdit entity id model
+
+        GotWorkspaceEdit entity id result ->
+            if model.workspaceEditRequest /= Just ( entity, id ) then ( model, Cmd.none )
+            else if Update.Drafts.hasOpen model then ( { model | workspaceEditRequest = Nothing, toast = Just "Save or close the current form before editing another record." }, Cmd.none )
+            else finishWorkspaceEdit entity result { model | workspaceEditRequest = Nothing }
+
+        RefreshRecords ->
+            if model.route == Deals then
+                loadDeals { model | dealsRequestId = model.dealsRequestId + 1 }
+            else
+                refreshRecords model
+
         ToggledSideBar ->
             ( { model | sidebarOpen = not model.sidebarOpen }, Cmd.none )
 
@@ -162,6 +205,14 @@ update msg model =
                 clearedModel =
                     { model
                         | route = route
+                        , workspaceEditRequest = Nothing
+                        , dealsRefreshing = False
+                        , pendingDealsQuery = Nothing
+                        , deals = if model.dealsRefreshing || model.pendingDealsQuery /= Nothing then NotAsked else case model.deals of
+                            Loading -> NotAsked
+                            Failure _ -> NotAsked
+                            Success data -> Success { data | loadingMore = False }
+                            other -> other
                         , dealsRequestId = model.dealsRequestId + 1
                         , sidebarOpen = False
                         , contactForm = Nothing
@@ -192,6 +243,7 @@ update msg model =
                         , passwordForm = emptyPasswordForm
                         , logoutAllConfirm = False
                         , bulkDeleteConfirm = False
+                        , bulkDealRevisions = Dict.empty
                         , bulkMoveStage = Nothing
                         , caseForm = Nothing
                         , deletingCase = Nothing
@@ -450,6 +502,7 @@ update msg model =
 
                             else
                                 clearedModel.contacts
+                        , dealsRefreshing = needsDeals
                         , deals =
                             if needsDeals then
                                 Loading
@@ -548,3 +601,71 @@ update msg model =
 
         _ ->
             ( model, Cmd.none )
+
+
+refreshRecords : Model -> ( Model, Cmd Msg )
+refreshRecords model =
+    case model.token of
+        Nothing ->
+            ( model, Cmd.none )
+
+        Just token ->
+            let
+                cmd =
+                    case model.route of
+                        ContactDetail id -> Api.fetchContact token id FetchedContact
+                        DealDetail id -> Api.fetchDeal token id FetchedDeal
+                        SchoolDetail id -> Api.fetchSchool token id FetchedSchool
+                        StudentDetail id -> Api.fetchStudent token id FetchedStudent
+                        AgentDetail id -> Api.fetchAgent token id FetchedAgent
+                        LeadDetail id -> Api.fetchLead token id FetchedLead
+                        CaseDetail id -> Api.fetchCase token id FetchedCase
+                        InvoiceDetail id -> Api.fetchInvoice token id FetchedInvoice
+                        PartnerDetail id -> Api.fetchPartner token id FetchedPartner
+                        Contacts -> Tuple.second (loadContacts model)
+                        Deals -> Tuple.second (loadDeals model)
+                        Tasks -> Tuple.second (loadTasks model)
+                        Schools -> Tuple.second (loadSchools model)
+                        Students -> Tuple.second (loadStudents model)
+                        Agents -> Tuple.second (loadAgents model)
+                        Leads -> Tuple.second (loadLeads model)
+                        Cases -> Tuple.second (loadCases model)
+                        Invoices -> Tuple.second (loadInvoices model)
+                        Partners -> Tuple.second (loadPartners model)
+                        Home -> Api.fetchReports token GotReports
+                        Reports -> Api.fetchReports token GotReports
+                        _ -> Cmd.none
+            in
+            ( model, cmd )
+
+
+requestWorkspaceEdit : String -> String -> Model -> ( Model, Cmd Msg )
+requestWorkspaceEdit entity id model =
+    case model.token of
+        Just token ->
+            ( { model | workspaceEditRequest = Just ( entity, id ) }, Api.workspaceGet token ("/api/records/" ++ entity ++ "/" ++ id) (D.field "record" D.value) (GotWorkspaceEdit entity id) )
+        Nothing -> ( model, Cmd.none )
+
+
+finishWorkspaceEdit : String -> Result String D.Value -> Model -> ( Model, Cmd Msg )
+finishWorkspaceEdit entity result model =
+    case result of
+        Ok value ->
+            let
+                edit =
+                    case entity of
+                        "contacts" -> D.decodeValue (D.map OpenedEditContact Api.contactDecoder) value
+                        "leads" -> D.decodeValue (D.map OpenedEditLead Api.leadDecoder) value
+                        "students" -> D.decodeValue (D.map OpenedEditStudent Api.studentDecoder) value
+                        "cases" -> D.decodeValue (D.map OpenedEditCase Api.caseDecoder) value
+                        "invoices" -> D.decodeValue (D.map OpenedEditInvoice Api.invoiceDecoder) value
+                        _ -> Err (D.Failure "Unsupported record" value)
+            in
+            case edit of
+                Ok message ->
+                    if Update.Access.allowed message model then
+                        -- Main dispatches this edit through the normal domain update.
+                        ( model, Task.perform identity (Task.succeed message) )
+                    else ( { model | toast = Just "This record is read-only." }, Cmd.none )
+                Err _ -> ( { model | toast = Just "Could not open the record for editing." }, Cmd.none )
+        Err error -> ( { model | toast = Just error }, Cmd.none )

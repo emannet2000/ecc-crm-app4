@@ -4,6 +4,8 @@ module View.Deals exposing (dealStageOptions, dealsView)
 -}
 
 import Dict
+import Html.Lazy
+import Update.Access
 import Html exposing (..)
 import Html.Attributes as Attr exposing (class, disabled, placeholder, type_, value)
 import Html.Events exposing (onClick, onInput)
@@ -13,7 +15,6 @@ import Set
 import Svg
 import Types exposing (..)
 import View.StaffPicker as StaffPicker
-import View.Contacts exposing (contactById, contactList)
 import View.Filters exposing (isStale)
 import View.Format exposing (dealAgeClass, dealAgeDays, dealAgeLabel, formatCurrency, formatCurrencyWith)
 import View.Helpers exposing (initials, svgIcon, svgPath)
@@ -154,18 +155,9 @@ dealStageClass stage =
             "pipeline-col--lead"
 
 
-dealCard : Model -> List Contact -> Maybe String -> Deal -> Html Msg
-dealCard model contacts movingId d =
+dealCard : Bool -> Bool -> Bool -> String -> Deal -> Html Msg
+dealCard isSelected isMoving isDragging today d =
     let
-        isMoving =
-            movingId == Just d.id
-
-        isDragging =
-            model.draggingDealId == Just d.id
-
-        isSelected =
-            Set.member d.id model.selectedDeals
-
         ( prevStage, nextStage ) =
             stageNeighbors d.stage
 
@@ -190,11 +182,8 @@ dealCard model contacts movingId d =
                 , "deal-card--selectable"
                 ]
 
-        linkedContact =
-            contactById contacts d.contactId
-
         ageDays =
-            dealAgeDays model.today d.createdAt
+            dealAgeDays today d.createdAt
 
         ageLabel =
             dealAgeLabel ageDays
@@ -246,7 +235,8 @@ dealCard model contacts movingId d =
 
         onCardKeyDown =
             Html.Events.preventDefaultOn "keydown"
-                (D.field "key" D.string
+                (D.field "target" (D.field "dataset" (D.field "dealId" D.string))
+                    |> D.andThen (\id -> if id == d.id then D.field "key" D.string else D.fail "nested control")
                     |> D.andThen
                         (\key ->
                             if key == "Enter" || key == " " then
@@ -267,9 +257,10 @@ dealCard model contacts movingId d =
     in
     div
         [ class cardClass
+        , Attr.attribute "data-deal-id" d.id
         , Attr.attribute "role" "button"
         , Attr.attribute "tabindex" "0"
-        , Attr.attribute "draggable" "true"
+        , Attr.attribute "draggable" (if d.editable then "true" else "false")
         , onClick (OpenedDealDetail d)
         , onCardKeyDown
         , onDragStart
@@ -284,6 +275,7 @@ dealCard model contacts movingId d =
                     "deal-card__checkbox"
                 )
             , type_ "button"
+            , Attr.disabled (not d.editable)
             , Attr.attribute "role" "checkbox"
             , Attr.attribute "aria-checked"
                 (if isSelected then
@@ -308,6 +300,7 @@ dealCard model contacts movingId d =
                 , type_ "button"
                 , Attr.title "Edit"
                 , Attr.attribute "aria-label" ("Edit " ++ d.title)
+                , Attr.disabled (not d.editable)
                 , Html.Events.stopPropagationOn "click"
                     (D.succeed ( OpenedEditDeal d, True ))
                 ]
@@ -317,6 +310,7 @@ dealCard model contacts movingId d =
                 , type_ "button"
                 , Attr.title "Delete"
                 , Attr.attribute "aria-label" ("Delete " ++ d.title)
+                , Attr.disabled (not d.editable)
                 , Html.Events.stopPropagationOn "click"
                     (D.succeed ( RequestedDeleteDeal d, True ))
                 ]
@@ -346,40 +340,17 @@ dealCard model contacts movingId d =
             text ""
 
           else
-            case linkedContact of
-                Just c ->
-                    div
-                        [ class "deal-card__contact deal-card__contact--link"
-                        , Attr.attribute "role" "button"
-                        , Attr.attribute "tabindex" "0"
-                        , Attr.title ("Open " ++ c.name)
-                        , Html.Events.stopPropagationOn "click"
-                            (D.succeed ( OpenedContactDetail c, True ))
-                        , Html.Events.preventDefaultOn "keydown"
-                            (D.field "key" D.string
-                                |> D.andThen
-                                    (\key ->
-                                        if key == "Enter" || key == " " then
-                                            D.succeed ( OpenedContactDetail c, True )
-
-                                        else
-                                            D.fail "ignore"
-                                    )
-                            )
-                        ]
-                        [ div [ class "deal-card__contact-avatar" ]
-                            [ text (initials c.name) ]
-                        , span [ class "deal-card__contact-name" ]
-                            [ text c.name ]
-                        ]
-
-                Nothing ->
-                    div [ class "deal-card__contact" ]
-                        [ div [ class "deal-card__contact-avatar" ]
-                            [ text (initials d.contactName) ]
-                        , span [ class "deal-card__contact-name" ]
-                            [ text d.contactName ]
-                        ]
+            div
+                ([ class "deal-card__contact" ] ++
+                    (if String.isEmpty d.contactId then [] else
+                        [ Attr.attribute "role" "button", Attr.tabindex 0
+                        , Attr.title ("Open " ++ d.contactName)
+                        , Html.Events.stopPropagationOn "click" (D.succeed ( NavigatedTo (ContactDetail d.contactId), True ))
+                        , Html.Events.preventDefaultOn "keydown" (D.field "key" D.string |> D.andThen (\key -> if key == "Enter" || key == " " then D.succeed ( NavigatedTo (ContactDetail d.contactId), True ) else D.fail "ignore"))
+                        ]))
+                [ div [ class "deal-card__contact-avatar" ] [ text (initials d.contactName) ]
+                , span [ class "deal-card__contact-name" ] [ text d.contactName ]
+                ]
         , div [ class "deal-card__footer" ]
             [ div [ class "deal-card__meta" ]
                 metaItems
@@ -391,7 +362,7 @@ dealCard model contacts movingId d =
                     , Attr.attribute "aria-label" ("Move " ++ d.title ++ " back")
                     , Html.Events.stopPropagationOn "click"
                         (D.succeed ( moveBackMsg, True ))
-                    , disabled (isMoving || prevStage == Nothing)
+                    , disabled (not d.editable || isMoving || prevStage == Nothing)
                     ]
                     [ text "←" ]
                 , button
@@ -401,7 +372,7 @@ dealCard model contacts movingId d =
                     , Attr.attribute "aria-label" ("Move " ++ d.title ++ " forward")
                     , Html.Events.stopPropagationOn "click"
                         (D.succeed ( moveForwardMsg, True ))
-                    , disabled (isMoving || nextStage == Nothing)
+                    , disabled (not d.editable || isMoving || nextStage == Nothing)
                     ]
                     [ text "→" ]
                 ]
@@ -409,8 +380,8 @@ dealCard model contacts movingId d =
         ]
 
 
-dealColumn : Model -> List Contact -> Maybe String -> String -> List Deal -> Html Msg
-dealColumn model contacts movingId stageName deals =
+dealColumn : Model -> Maybe String -> String -> List Deal -> Html Msg
+dealColumn model movingId stageName deals =
     let
         total =
             deals |> List.map .value |> List.sum
@@ -510,7 +481,8 @@ dealColumn model contacts movingId stageName deals =
                 , type_ "button"
                 , Attr.title ("Add deal to " ++ stageName)
                 , Attr.attribute "aria-label" ("Add deal to " ++ stageName)
-                , onClick (OpenedAddDealWithStage stageName)
+                , Attr.disabled (not (Update.Access.canCreate model))
+                        , onClick (OpenedAddDealWithStage stageName)
                 ]
                 [ svgIcon
                     [ Attr.attribute "viewBox" "0 0 24 24"
@@ -563,18 +535,22 @@ dealColumn model contacts movingId stageName deals =
 
           else
             div [ class "pipeline-col__cards" ]
-                (List.map (dealCard model contacts movingId) deals)
+                (if List.isEmpty deals then
+                    [ p [ class "pipeline-col__unloaded" ] [ text (String.fromInt count ++ " matching deals. Load more cards to see this stage.") ]
+                    , button [ class "ecc-btn ecc-btn--ghost ecc-btn--inline", disabled model.dealsRefreshing, onClick LoadMoreDeals ] [ text "Load more deals" ]
+                    ]
+                 else List.map (\deal -> Html.Lazy.lazy5 dealCard (Set.member deal.id model.selectedDeals) (movingId == Just deal.id) (model.draggingDealId == Just deal.id) model.today deal) deals)
         ]
 
 
-pipelineBoard : Model -> List Contact -> Maybe String -> List Deal -> Html Msg
-pipelineBoard model contacts movingId deals =
+pipelineBoard : Model -> Maybe String -> List Deal -> Html Msg
+pipelineBoard model movingId deals =
     div [ class "pipeline-board" ]
         (dealStageOptions
+            |> List.filter (\stage -> String.isEmpty model.dealStageFilter || stage == model.dealStageFilter)
             |> List.map
                 (\stageName ->
                     dealColumn model
-                        contacts
                         movingId
                         stageName
                         (List.filter (\d -> d.stage == stageName) deals)
@@ -601,7 +577,7 @@ dealsView model =
             dealsSkeleton
 
         Failure msg ->
-            div [ class "content__empty-block" ] [ text ("Could not load deals: " ++ msg), button [ class "ecc-btn ecc-btn--ghost ecc-btn--inline", onClick (NavigatedTo model.route) ] [ text "Retry" ] ]
+            div [ class "content__empty-block" ] [ text ("Could not load deals: " ++ msg), button [ class "ecc-btn ecc-btn--ghost ecc-btn--inline", onClick RefreshDeals ] [ text "Retry" ] ]
 
         Success data ->
             let
@@ -644,7 +620,7 @@ dealsView model =
                     String.isEmpty (String.trim data.query)
 
                 isSearching =
-                    model.pendingDealsQuery /= Nothing
+                    model.pendingDealsQuery /= Nothing || model.dealsRefreshing
 
                 summaryClass =
                     if isSearching then
@@ -664,7 +640,7 @@ dealsView model =
                         || not (String.isEmpty model.dateFromFilter)
                         || not (String.isEmpty model.dateToFilter)
             in
-            div []
+            div [ Attr.attribute "aria-busy" (if isSearching then "true" else "false") ]
                 [ div [ class "page-toolbar" ]
                     [ div [ class "page-toolbar__search" ]
                         [ svgIcon
@@ -702,6 +678,7 @@ dealsView model =
                     , button
                         [ class "ecc-btn ecc-btn--inline"
                         , type_ "button"
+                        , Attr.disabled (not (Update.Access.canCreate model))
                         , onClick OpenedAddDeal
                         ]
                         [ text "Add deal" ]
@@ -743,9 +720,7 @@ dealsView model =
                         [ text
                             (if hasActiveFilters then
                                 String.fromInt count
-                                    ++ " of "
-                                    ++ String.fromInt data.total
-                                    ++ " shown"
+                                    ++ " matching deals"
 
                              else
                                 String.fromInt data.total
@@ -867,7 +842,8 @@ dealsView model =
                                 [ button
                                     [ class "ecc-btn ecc-btn--inline"
                                     , type_ "button"
-                                    , onClick OpenedAddDeal
+                                    , Attr.disabled (not (Update.Access.canCreate model))
+                        , onClick OpenedAddDeal
                                     ]
                                     [ text "Add your first deal" ]
                                 ]
@@ -880,17 +856,24 @@ dealsView model =
                     div [ class "deals-pipeline" ]
                         [ div [ class "deals-pipeline__heading" ]
                             [ h3 [] [ text "Deals by stage" ]
-                            , p [] [ text "Open a deal for details. Drag cards or use the arrows to change stage." ]
+                            , p [] [ text "Open a deal for details. Choose a stage to focus the board. Use the arrows to move a deal." ]
                             ]
+                        , label [ class "deals-stage-picker" ]
+                            [ text "Show stage"
+                            , select [ Attr.attribute "aria-label" "Show deal stage", onInput UpdatedDealStageFilter ]
+                                (option [ value "", Attr.selected (model.dealStageFilter == "") ] [ text "All stages" ] :: List.map (\stage -> option [ value stage, Attr.selected (model.dealStageFilter == stage) ] [ text (stage ++ " (" ++ String.fromInt (Dict.get stage data.summary.stages |> Maybe.map .count |> Maybe.withDefault 0) ++ ")") ]) dealStageOptions)
+                            ]
+                        , if isSearching then p [ class "deals-update-status", Attr.attribute "role" "status" ] [ text "Updating deals…" ] else text ""
+                        , if String.isEmpty model.dealStageFilter then p [ class "deals-mobile-hint" ] [ text "Swipe to browse stages, or choose a stage above." ] else text ""
                         , p [ class "deals-page-scope" ]
                             [ text (String.fromInt (List.length visibleDeals) ++ " of " ++ String.fromInt count ++ " matching deals loaded · metrics cover all matches") ]
-                        , pipelineBoard model (contactList model) model.movingDealId visibleDeals
+                        , pipelineBoard model model.movingDealId visibleDeals
                         , div [ class "deals-load-actions" ]
                             [ if List.length data.items < data.total then
-                                button [ class "ecc-btn ecc-btn--inline", disabled data.loadingMore, onClick LoadMoreDeals ] [ text (if data.loadingMore then "Loading more…" else "Load more deals") ]
+                                button [ class "ecc-btn ecc-btn--inline", disabled (data.loadingMore || model.dealsRefreshing), onClick LoadMoreDeals ] [ text (if data.loadingMore then "Loading more…" else "Load more deals") ]
                               else
                                 text "All matching cards loaded"
-                            , button [ class "ecc-btn ecc-btn--ghost ecc-btn--inline", onClick RefreshDeals ] [ text "Refresh board" ]
+                            , button [ class "ecc-btn ecc-btn--ghost ecc-btn--inline", disabled model.dealsRefreshing, onClick RefreshDeals ] [ text "Refresh board" ]
                             ]
                         ]
                 ]

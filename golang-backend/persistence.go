@@ -89,10 +89,13 @@ func restoreStore(saved diskStore) {
 }
 
 type bufferedResponse struct {
+	user   *User
 	header http.Header
 	status int
 	body   bytes.Buffer
 }
+
+func (w *bufferedResponse) recordUser() *User { return w.user }
 
 func (w *bufferedResponse) Header() http.Header { return w.header }
 func (w *bufferedResponse) WriteHeader(status int) {

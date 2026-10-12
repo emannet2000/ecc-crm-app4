@@ -13,6 +13,9 @@
           theme: localStorage.getItem("theme")
         }
       });
+      window.connectDraftStorage(app);
+      app.ports.recordSaved.subscribe(function (id) { window.dispatchEvent(new CustomEvent('crm:record-changed', {detail: id})); });
+      window.addEventListener('crm:workspace-action', function (event) { app.ports.workspaceAction.send(event.detail); });
       app.ports.storeToken.subscribe(function (token) {
         localStorage.removeItem("token");
         if (!token) fetch("/api/session/logout", {method:"POST",credentials:"same-origin"});

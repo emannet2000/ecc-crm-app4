@@ -63,7 +63,10 @@ loadDeals : Model -> ( Model, Cmd Msg )
 loadDeals model =
     case model.token of
         Just t ->
-            ( { model | deals = Loading }
+            ( { model | dealsRefreshing = True, deals = case model.deals of
+                    Success data -> Success { data | loadingMore = False }
+                    _ -> Loading
+              }
             , Api.fetchDeals t (dealsQueryOf model) model.ownerFilter model.dateFromFilter model.dateToFilter "" dealsBoardLimit 0 (GotDealsAt model.dealsRequestId (dealsQueryOf model) False)
             )
 

@@ -248,7 +248,7 @@ update msg model =
         ToggledTaskStatus task newStatus ->
             case model.token of
                 Just token ->
-                    ( model, Api.updateTaskStatus token task.id newStatus GotToggledTask )
+                    ( model, Api.updateTaskStatus token task.id task.revision newStatus GotToggledTask )
 
                 Nothing ->
                     ( model, Cmd.none )
@@ -283,7 +283,7 @@ update msg model =
         ConfirmedDeleteTask ->
             case ( model.deletingTask, model.token ) of
                 ( Just task, Just token ) ->
-                    ( model, Api.deleteTask token task.id GotDeletedTask )
+                    ( model, Api.deleteTask token task.id task.revision GotDeletedTask )
 
                 _ ->
                     ( model, Cmd.none )

@@ -4,7 +4,7 @@
   "scripts": {
     "test": "node --test tests/dom.test.cjs tests/administration.test.cjs tests/mobile.test.cjs tests/workspace-interactions.test.cjs tests/usability-review.test.cjs",
     "test:live": "ECC_BROWSER_LIVE=true node --test tests/browser.test.cjs tests/journey.browser.cjs",
-    "test:browser": "node --test tests/browser.test.cjs tests/journey.browser.cjs",
+    "test:browser": "node --test tests/browser.test.cjs tests/journey.browser.cjs tests/client-workspace.browser.cjs",
     "test:offline": "node --test tests/offline.browser.cjs",
     "test:integrations": "node tests/live-integrations.cjs",
     "test:consolidation": "node --test tests/consolidation.browser.cjs",
@@ -13,7 +13,9 @@
     "test:improvements": "node --test tests/improvements.browser.cjs",
     "test:workspace-next": "node --test tests/workspace-next.browser.cjs",
     "test:mobile-chat": "node --test tests/mobile-chat.browser.cjs",
-    "test:reports": "node --test tests/reports.browser.cjs"
+    "test:reports": "node --test tests/reports.browser.cjs",
+    "test:client-workspace": "node --test tests/client-workspace.browser.cjs",
+    "test:deals": "node --test tests/deals.browser.cjs"
   },
   "devDependencies": {
     "puppeteer": "25.10.0",

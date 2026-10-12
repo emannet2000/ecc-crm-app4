@@ -226,6 +226,9 @@ mobileNavigation model =
                 ContactDetail _ ->
                     Contacts
 
+                InvoiceDetail _ ->
+                    Invoices
+
                 CaseDetail _ ->
                     Cases
 
@@ -233,7 +236,7 @@ mobileNavigation model =
                     route
 
         moreSelected =
-            model.sidebarOpen || not (List.member selected [ Home, Cases, Chat, Tasks, Invoices ])
+            model.sidebarOpen || not (List.member selected [ Home, Cases, Invoices, Chat, Tasks ])
     in
     nav [ class "mobile-nav", Attr.attribute "aria-label" "Mobile navigation" ]
         [ navItem selected Home "Home" iconHome
@@ -357,7 +360,7 @@ pageTitle model =
             "Contacts"
 
         ContactDetail _ ->
-            "Contact"
+            "Client workspace"
 
         Deals ->
             "Deals"
@@ -393,7 +396,7 @@ pageTitle model =
             "Students"
 
         StudentDetail _ ->
-            "Student"
+            "Client workspace"
 
         Agents ->
             "Agents"
@@ -405,13 +408,13 @@ pageTitle model =
             "Leads"
 
         LeadDetail _ ->
-            "Lead"
+            "Client workspace"
 
         Cases ->
             "Applications"
 
         CaseDetail _ ->
-            "Application"
+            "Client workspace"
 
         Invoices ->
             "Invoices"

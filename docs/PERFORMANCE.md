@@ -91,7 +91,8 @@ The PWA shell includes it so offline work has the same interactions.
 
 Daily work and student journey rendering remain owned by their custom elements
 in `public/components.js`. Application requirements belong to `public/progress.js`;
-modal drafts belong to `public/draft-recovery.js`; staff observations and review
+modal drafts and revision tokens belong to Elm (`src/Update/Drafts.elm` and
+`src/Api.elm`), with session storage provided by `public/draft-storage.js`; staff observations and review
 priorities belong to `public/usability.js`. Continue consolidating by behavior
 when editing those screens. Keep lifecycle cleanup and meaningful interaction
 checks with each move, and avoid changing backend permission enforcement during

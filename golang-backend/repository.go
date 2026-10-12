@@ -201,7 +201,10 @@ func handleRepositoryRead(w http.ResponseWriter, r *http.Request, entity, id str
 		}
 	}
 	var total int
-	if err = storeDB(r).QueryRow("SELECT count(*) FROM "+entity+" record WHERE "+where, args...).Scan(&total); err != nil {
+	if board {
+		// The stage aggregation already counted every visible match in this snapshot.
+		total = summary.Count
+	} else if err = storeDB(r).QueryRow("SELECT count(*) FROM "+entity+" record WHERE "+where, args...).Scan(&total); err != nil {
 		writeError(w, 500, "Could not load record totals")
 		return
 	}

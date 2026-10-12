@@ -33,7 +33,8 @@ dealStagePillsDetail isMoving d =
                 button
                     [ type_ "button"
                     , class cls
-                    , onClick (MovedDeal d s)
+                    , Attr.disabled (not d.editable)
+                            , onClick (MovedDeal d s)
                     , disabled isMoving
                     ]
                     [ text s ]
@@ -201,7 +202,8 @@ dealDetailView model d =
                 [ button
                     [ class "ecc-btn ecc-btn--ghost ecc-btn--inline"
                     , type_ "button"
-                    , onClick (OpenedEditDeal d)
+                    , Attr.disabled (not d.editable)
+            , onClick (OpenedEditDeal d)
                     ]
                     [ iconEdit
                     , span [] [ text "Edit" ]
@@ -209,7 +211,8 @@ dealDetailView model d =
                 , button
                     [ class "ecc-btn ecc-btn--danger ecc-btn--inline"
                     , type_ "button"
-                    , onClick (RequestedDeleteDeal d)
+                    , Attr.disabled (not d.editable)
+            , onClick (RequestedDeleteDeal d)
                     ]
                     [ iconTrash
                     , span [] [ text "Delete" ]

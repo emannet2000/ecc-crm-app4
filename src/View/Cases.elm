@@ -3,6 +3,8 @@ module View.Cases exposing (caseDetailView, caseFormModal, casesView, deleteCase
 {-| Cases: list, detail (with documents panel), form.
 -}
 
+import View.Drafts
+import Update.Access
 import Html exposing (..)
 import Html.Attributes as Attr exposing (checked, class, disabled, for, id, placeholder, type_, value)
 import Html.Events exposing (onClick, onInput, onSubmit)
@@ -120,6 +122,7 @@ caseRow c =
                 , type_ "button"
                 , Attr.title "Edit"
                 , Attr.attribute "aria-label" ("Edit " ++ c.caseNumber)
+                , Attr.disabled (not c.editable)
                 , Html.Events.stopPropagationOn "click"
                     (D.succeed ( OpenedEditCase c, True ))
                 ]
@@ -129,6 +132,7 @@ caseRow c =
                 , type_ "button"
                 , Attr.title "Delete"
                 , Attr.attribute "aria-label" ("Delete " ++ c.caseNumber)
+                , Attr.disabled (not c.editable)
                 , Html.Events.stopPropagationOn "click"
                     (D.succeed ( RequestedDeleteCase c, True ))
                 ]
@@ -188,6 +192,7 @@ casesView model =
                     , button
                         [ class "ecc-btn ecc-btn--inline"
                         , type_ "button"
+                        , Attr.disabled (not (Update.Access.canCreate model))
                         , onClick OpenedAddCase
                         ]
                         [ text "Add application" ]
@@ -293,14 +298,16 @@ documentItem d =
                         [ class "row-action"
                         , type_ "button"
                         , Attr.title "Edit"
-                        , onClick (OpenedEditDocument d)
+                        , Attr.disabled (not d.editable)
+            , onClick (OpenedEditDocument d)
                         ]
                         [ iconEdit ]
                     , button
                         [ class "row-action row-action--danger"
                         , type_ "button"
                         , Attr.title "Delete"
-                        , onClick (RequestedDeleteDocument d)
+                        , Attr.disabled (not d.editable)
+            , onClick (RequestedDeleteDocument d)
                         ]
                         [ iconTrash ]
                     ]
@@ -317,6 +324,7 @@ documentItem d =
                                  else
                                     "stage-pill"
                                 )
+                            , Attr.disabled (not d.editable)
                             , onClick (UpdatedDocumentStatus d s)
                             ]
                             [ text s ]
@@ -432,7 +440,8 @@ caseDetailView model c =
                 [ button
                     [ class "ecc-btn ecc-btn--ghost ecc-btn--inline"
                     , type_ "button"
-                    , onClick (OpenedEditCase c)
+                    , Attr.disabled (not c.editable)
+            , onClick (OpenedEditCase c)
                     ]
                     [ iconEdit
                     , span [] [ text "Edit" ]
@@ -440,7 +449,8 @@ caseDetailView model c =
                 , button
                     [ class "ecc-btn ecc-btn--danger ecc-btn--inline"
                     , type_ "button"
-                    , onClick (RequestedDeleteCase c)
+                    , Attr.disabled (not c.editable)
+            , onClick (RequestedDeleteCase c)
                     ]
                     [ iconTrash
                     , span [] [ text "Delete" ]
@@ -451,7 +461,8 @@ caseDetailView model c =
             [ h2 [ class "detail-card__title" ] [ text "Application essentials" ]
             , p [ class "application-stage" ] [ text ("Stage: " ++ display c.currentStage) ]
             , node "crm-work-plan" [ Attr.attribute "entity" "cases", Attr.attribute "record-id" c.id, id "next-action" ] []
-            , button [ class "ecc-btn ecc-btn--ghost ecc-btn--inline", type_ "button", onClick (OpenedEditCase c) ] [ text "Change owner or application details" ]
+            , button [ class "ecc-btn ecc-btn--ghost ecc-btn--inline", type_ "button", Attr.disabled (not c.editable)
+            , onClick (OpenedEditCase c) ] [ text "Change owner or application details" ]
             , nav [ class "links", Attr.attribute "aria-label" "Application journey" ]
                 [ if String.isEmpty c.clientId then text "" else a [ Attr.href ("/contacts/" ++ c.clientId ++ "#record-tools?tab=history") ] [ text "Payments and client history" ]
                 , if String.isEmpty c.studentId then text "" else a [ Attr.href ("/students/" ++ c.studentId) ] [ text "Student journey" ]
@@ -534,7 +545,8 @@ caseDetailView model c =
                         (button
                             [ class "detail-card__action"
                             , type_ "button"
-                            , onClick OpenedAddDocument
+                            , Attr.disabled (not (Update.Access.canCreate model))
+                        , onClick OpenedAddDocument
                             ]
                             [ text "Add document" ]
                         )
@@ -737,7 +749,7 @@ caseFormView model cf isEdit =
                 "Save application"
     in
     form [ onSubmit SubmittedCaseForm, Attr.novalidate True ]
-        [ Html.node "crm-draft-recovery" [] []
+        [ View.Drafts.view model
         , case formError of
             Just msg ->
                 div [ class "ecc-alert ecc-alert--error" ] [ text msg ]
@@ -1041,8 +1053,8 @@ documentStatusPills df =
         ]
 
 
-documentFormView : DocumentForm -> Bool -> Html Msg
-documentFormView df isEdit =
+documentFormView : Model -> DocumentForm -> Bool -> Html Msg
+documentFormView model df isEdit =
     let
         formError =
             documentFormFieldError "form" df
@@ -1058,7 +1070,7 @@ documentFormView df isEdit =
                 "Save document"
     in
     form [ onSubmit SubmittedDocumentForm, Attr.novalidate True ]
-        [ Html.node "crm-draft-recovery" [] []
+        [ View.Drafts.view model
         , case formError of
             Just msg ->
                 div [ class "ecc-alert ecc-alert--error" ] [ text msg ]
@@ -1213,7 +1225,7 @@ documentFormModal model df =
                     ]
 
               else
-                documentFormView df isEdit
+                documentFormView model df isEdit
             ]
         ]
 
