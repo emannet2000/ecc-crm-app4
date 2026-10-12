@@ -84,6 +84,9 @@ pageContent model user =
             Tasks ->
                 tasksView model
 
+            Chat ->
+                Html.node "crm-team-chat" [ Attr.attribute "user-id" user.id ] []
+
             Workspace ->
                 Html.node "crm-workspace" [ class "workspace-tools", Attr.attribute "workspace-query" model.workspaceQuery ] []
 
@@ -376,6 +379,7 @@ appShell model user =
     div
         [ class
             ("app-shell"
+                ++ (if model.route == Chat then " app-shell--chat" else "")
                 ++ (if user.role == "viewer" then
                         " app-shell--viewer"
 
@@ -413,7 +417,11 @@ appShell model user =
             ]
         , mobileNavigation model
         , Html.node "crm-connection-status" [] []
-        , Html.node "crm-ai-chat" [] []
+        , if model.route == Chat then
+            text ""
+
+          else
+            Html.node "crm-ai-chat" [] []
         ]
 
 

@@ -1,6 +1,6 @@
 FROM node:24-bookworm-slim AS frontend
 WORKDIR /app
-RUN npm install -g elm@0.19.2-0
+RUN npm install -g elm@0.19.1-6
 COPY elm.json ./
 COPY src ./src
 RUN elm make src/Main.elm --optimize --output=elm.js

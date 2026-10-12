@@ -277,20 +277,36 @@ homeView model user =
         , p [ class "content__lede" ]
             [ text
                 (if String.isEmpty model.today then
-                    "Here's what's happening across your workspace today."
+                    "Review your priorities and choose the next action."
 
                  else
-                    model.today ++ " · Here's what's happening across your workspace today."
+                    model.today ++ " · Review your priorities and choose the next action."
                 )
             ]
         , Html.node "crm-my-work" [] []
-        , details [ class "application-controls" ]
+        , details [ class "home-secondary" ]
+            [ summary [] [ text "Messages and overdue work summary" ]
+            , Html.node "crm-work-outcomes" [ Attr.attribute "attention-only" "" ] []
+            ]
+        , details [ class "application-controls", Attr.hidden True, Attr.attribute "data-ai-brief" "" ]
             [ summary [] [ text "Optional AI work brief" ], Html.node "crm-ai-productivity" [] [] ]
         , if user.role == "admin" || user.role == "manager" then
-            div [] [ Html.node "crm-priority-queues" [ Attr.attribute "queue" "unassigned", Attr.attribute "exceptions-only" "true" ] [], Html.node "crm-operational-attention" [] [] ]
+            div []
+                [ details [ class "home-secondary" ]
+                    [ summary [] [ text "Manager exceptions · ownership, plans and handoffs" ]
+                    , Html.node "crm-priority-queues" [ Attr.attribute "queue" "unassigned", Attr.attribute "exceptions-only" "true" ] []
+                    ]
+                , details [ class "home-secondary" ]
+                    [ summary [] [ text "Operational alerts · delivery, integrations and backups" ]
+                    , Html.node "crm-operational-attention" [] []
+                    ]
+                ]
           else
             text ""
-        , Html.node "crm-recent-changes" [] []
+        , details [ class "home-secondary" ]
+            [ summary [] [ text "Recent workspace changes" ]
+            , Html.node "crm-recent-changes" [] []
+            ]
         ]
 
 

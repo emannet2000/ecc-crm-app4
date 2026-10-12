@@ -9,7 +9,7 @@ import Html.Events exposing (onClick)
 import Json.Encode
 import Svg
 import Types exposing (..)
-import View.Icons exposing (iconAgent, iconContacts, iconDeals, iconHome, iconLead, iconMoon, iconReports, iconSchool, iconSettings, iconSignOut, iconStudent, iconSun, iconTasks)
+import View.Icons exposing (iconAgent, iconChat, iconContacts, iconDeals, iconHome, iconLead, iconMoon, iconReports, iconSchool, iconSettings, iconSignOut, iconStudent, iconSun, iconTasks)
 import View.Search exposing (searchView)
 
 
@@ -152,6 +152,7 @@ sidebar model user =
             ] []
         , nav [ class "sidebar__nav", Attr.attribute "aria-label" "Daily work" ]
             [ navItem effectiveRoute Home "My work today" iconHome
+            , navItem effectiveRoute Chat "Chat" iconChat
             , navItem effectiveRoute Leads "Leads" iconLead
             , div [ class "nav-preset nav-preset--adviser" ]
                 [ navItem effectiveRoute Students "Students" iconStudent
@@ -186,6 +187,7 @@ sidebar model user =
         , nav [ class "sidebar__nav sidebar__nav--bottom" ]
             [ a [ class "nav-item", Attr.href "/workspace?tab=communication" ] [ text "Communication" ]
             , a [ class "nav-item", Attr.href "/workspace?tab=calendar" ] [ text "Calendar" ]
+            , a [ class "nav-item", Attr.href "/workspace?tab=readiness" ] [ text "Getting started & readiness" ]
             , navItem effectiveRoute Workspace "Workspace tools" iconSettings
             , if user.role == "admin" then
                 navItem effectiveRoute Administration "System administration" iconSettings
@@ -231,14 +233,13 @@ mobileNavigation model =
                     route
 
         moreSelected =
-            model.sidebarOpen || not (List.member selected [ Home, Students, Cases, Tasks, Invoices, Reports ])
+            model.sidebarOpen || not (List.member selected [ Home, Cases, Chat, Tasks, Invoices ])
     in
     nav [ class "mobile-nav", Attr.attribute "aria-label" "Mobile navigation" ]
         [ navItem selected Home "Home" iconHome
-        , navItem selected Students "Students" iconStudent
         , navItem selected Cases "Applications" iconTasks
         , navItem selected Invoices "Invoices" iconDeals
-        , navItem selected Reports "Reports" iconReports
+        , navItem selected Chat "Chat" iconChat
         , navItem selected Tasks "Tasks" iconTasks
         , button
             [ class ("nav-item" ++ (if moreSelected then " nav-item--active" else ""))
@@ -367,6 +368,9 @@ pageTitle model =
         Tasks ->
             "Tasks"
 
+        Chat ->
+            "Chat"
+
         Workspace ->
             "Workspace tools"
 
@@ -457,6 +461,9 @@ pageDescription model =
 
         Invoices ->
             "Manage fees, payments, and outstanding balances."
+
+        Chat ->
+            "Private messages with your workspace team."
 
         Workspace ->
             "Manage your team, security, communication, and daily workflows."

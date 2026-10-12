@@ -248,6 +248,8 @@
       this.main.append(this.form('Workspace settings', 'Use an IANA timezone, such as Asia/Manila. Leave allowed networks empty for unrestricted access; an allowlist must include your current network.', [name, timezone, field('currency','Reporting currency',org.currency,currencies), field('ipAllowlist','Allowed IP addresses / CIDRs',org.ipAllowlist)], 'Save settings', data => this.mutate('/api/admin/organization', data, 'PUT')));
       const connections = card('Integrations', 'Configure email delivery, AI assistance and webhooks.');
       connections.append(node('a','Open integration settings',{href:'/workspace?tab=integrations'})); this.main.append(connections);
+      const readiness = card('Workspace readiness', 'Review setup, delivery failures, backup status and isolated restore verification.');
+      readiness.append(node('a','Getting started & readiness',{href:'/workspace?tab=readiness'})); this.main.append(readiness);
     }
   }
   customElements.define('crm-administration', Administration);

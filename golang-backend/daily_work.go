@@ -43,7 +43,16 @@ func dailySnapshot(w http.ResponseWriter, r *http.Request) (*http.Request, diskS
 		return r, diskStore{}, func() {}, false
 	}
 	r = r.WithContext(context.WithValue(r.Context(), requestTxKey, tx))
-	s, err := sqlWorkspace(r)
+	var s diskStore
+	if r.URL.Path == "/api/my-work" {
+		s, err = sqlDailyWorkload(r)
+	} else if r.URL.Path == "/api/workspace-priorities" {
+		s, err = sqlPriorityWorkspace(r)
+	} else if r.URL.Path == "/api/reports" {
+		s, err = sqlSummaryWorkspace(r)
+	} else {
+		s, err = sqlWorkspace(r)
+	}
 	if err != nil {
 		tx.Rollback()
 		writeError(w, 500, "Could not load workspace records")
@@ -51,6 +60,49 @@ func dailySnapshot(w http.ResponseWriter, r *http.Request) (*http.Request, diskS
 	}
 	return r, s, func() { tx.Rollback() }, true
 }
+
+// Daily work does not need full contacts, activity history, catalogs or receipt bodies.
+func sqlDailyWorkload(r *http.Request) (diskStore, error) {
+	var s diskStore
+	var err error
+	if s.Deals, err = readScopedRows[Deal](r, "deals"); err != nil {
+		return s, err
+	}
+	if s.Students, err = readScopedRows[Student](r, "students"); err != nil {
+		return s, err
+	}
+	if s.Tasks, err = readScopedRows[Task](r, "tasks"); err != nil {
+		return s, err
+	}
+	if s.Leads, err = readScopedRows[Lead](r, "leads"); err != nil {
+		return s, err
+	}
+	if s.Cases, err = readScopedRows[Case](r, "cases"); err != nil {
+		return s, err
+	}
+	if s.Invoices, err = readScopedRows[Invoice](r, "invoices"); err != nil {
+		return s, err
+	}
+	docs, err := readScopedRows[Document](r, "documents")
+	if err != nil {
+		return s, err
+	}
+	caseIDs, leadIDs := map[string]bool{}, map[string]bool{}
+	for _, c := range s.Cases {
+		caseIDs[c.ID] = true
+	}
+	for _, l := range s.Leads {
+		leadIDs[l.ID] = true
+	}
+	s.Documents = docs[:0]
+	for _, d := range docs {
+		if d.CaseID != "" && caseIDs[d.CaseID] || d.CaseID == "" && d.LeadID != "" && leadIDs[d.LeadID] {
+			s.Documents = append(s.Documents, d)
+		}
+	}
+	return s, nil
+}
+
 func handleMyWork(w http.ResponseWriter, r *http.Request) {
 	r, s, close, ok := dailySnapshot(w, r)
 	if !ok {
@@ -111,8 +163,9 @@ func handleMyWork(w http.ResponseWriter, r *http.Request) {
 		return items[i].Deadline != "" && (items[j].Deadline == "" || items[i].Deadline < items[j].Deadline)
 	})
 	handoffCount, overdueHandoffs := 0, 0
-	visibleCases := map[string]Case{}
-	for _, c := range s.Cases {
+	visibleCases := make(map[string]*Case, len(s.Cases))
+	for i := range s.Cases {
+		c := &s.Cases[i]
 		visibleCases[c.ID] = c
 	}
 	rows, err := storeDB(r).Query("SELECT data FROM workspace_entries WHERE org_id=? AND category='application_handoff'", currentUser(r).OrgID)
@@ -190,9 +243,9 @@ func handleMyWork(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	limit, offset := parseLimitOffset(r, 25, 0)
-	overview := dailyOverview(currentUser(r), s, filter)
-	for key, records := range overview {
-		counts[key] = len(records)
+	overview, overviewCounts := dailyOverview(currentUser(r), s, filter, category)
+	for key, count := range overviewCounts {
+		counts[key] = count
 	}
 	filtered := []productivityItem{}
 	for _, item := range items {

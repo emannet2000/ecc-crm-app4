@@ -4,8 +4,6 @@ import Html exposing (..)
 import Html.Attributes exposing (attribute, class, disabled, selected, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Types exposing (..)
-import View.Home exposing (managementChartsView)
-import View.Format exposing (formatCurrency)
 import View.Icons exposing (iconRefresh)
 
 
@@ -19,35 +17,21 @@ card label value =
 
 reportsView : Model -> Html Msg
 reportsView model =
-    div []
-        [ div [ class "reports-toolbar" ]
-            [ span [ class "reports-toolbar__hint" ] [ text "All records · Live overview" ]
-            , button [ class "ecc-btn ecc-btn--ghost ecc-btn--inline", type_ "button", onClick (NavigatedTo Reports) ] [ iconRefresh, text "Refresh reports" ]
+    div [ class "report-suite" ]
+        [ Html.node "crm-reports" [] []
+        , details [ class "report-secondary" ]
+            [ summary [] [ text "Operational outcomes and priorities" ]
+            , Html.node "crm-work-outcomes" [] []
+            , Html.node "crm-priority-queues" [] []
             ]
-        , case model.reports of
-            Success report ->
-                div [ class "reports-grid" ]
-                    [ card "Contacts" (String.fromInt report.contacts)
-                    , card "Students" (String.fromInt report.students)
-                    , card "Leads" (String.fromInt report.leads)
-                    , card "Active applications" (String.fromInt report.activeCases)
-                    , card "Open tasks" (String.fromInt report.openTasks)
-                    , card "Open pipeline" report.pipelineLabel
-                    , card "Won deal value" report.wonLabel
-                    , card "Outstanding invoices" report.balanceLabel
-                    ]
-
-            Failure message ->
-                p [ class "content__empty-block" ] [ text message ]
-
-            _ ->
-                p [ class "content__empty-block" ] [ text "Loading reports…" ]
-        , Html.node "crm-work-outcomes" [] []
-        , details [] [ summary [] [ text "Commercial pipeline and activity charts" ], managementChartsView model ]
-        , Html.node "crm-insights" [] []
-        , Html.node "crm-priority-queues" [] []
-        , div [ class "reports-panels" ]
-            [ exportsView model, auditView model ]
+        , details [ class "report-secondary" ]
+            [ summary [] [ text "Detailed operational analysis" ]
+            , Html.node "crm-insights" [] []
+            ]
+        , details [ class "report-secondary" ]
+            [ summary [] [ text "Record exports and change history" ]
+            , div [ class "reports-panels" ] [ exportsView model, auditView model ]
+            ]
         ]
 
 
@@ -56,7 +40,7 @@ exportsView model =
     section [ class "workspace-panel export-panel" ]
         [ span [ class "panel-eyebrow" ] [ text "Data & exports" ]
         , h2 [] [ text "Take your data with you" ]
-        , p [] [ text "Choose a module to download all its records as a CSV file." ]
+        , p [] [ text "Download the records your account can access." ]
         , div [ class "workspace-toolbar" ]
             [ select [ value model.exportEntity, onInput SelectedExportEntity, attribute "aria-label" "Records to export" ]
                 (List.map (\entity -> option [ value entity, selected (entity == model.exportEntity) ] [ text (if entity == "cases" then "Applications" else String.toUpper (String.left 1 entity) ++ String.dropLeft 1 entity) ])

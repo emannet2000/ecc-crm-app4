@@ -10,6 +10,7 @@ import Json.Decode as D
 import Router exposing (routeToPath)
 import Svg
 import Types exposing (..)
+import View.RecordPicker as RecordPicker
 import View.Dashboard exposing (ActivityEntry, PriorityAlert, activityPanel, alertsPanel, caseEntry, documentCorrectionAlert, documentEntry, expiredDocumentAlert, invoiceEntry, outstandingInvoiceAlert)
 import View.Format exposing (formatCurrency, formatCurrencyWith)
 import View.Helpers exposing (detailCard, detailEmpty, detailStat, infoRow, initials, paginationBar, svgIcon, svgPath)
@@ -766,32 +767,8 @@ studentRichField sf fieldId labelText inputType =
 
 
 studentSchoolSelect : Model -> StudentForm -> Html Msg
-studentSchoolSelect model sf =
+studentSchoolSelect _ sf =
     let
-        options =
-            let
-                loaded =
-                    case model.schools of
-                        Success data ->
-                            data.items
-
-                        _ ->
-                            []
-
-                current =
-                    case model.viewingSchool of
-                        Just school ->
-                            if List.any (\item -> item.id == school.id) loaded then
-                                []
-
-                            else
-                                [ school ]
-
-                        Nothing ->
-                            []
-            in
-            List.sortBy .name (loaded ++ current)
-
         err =
             studentFormFieldError "schoolId" sf
 
@@ -804,21 +781,7 @@ studentSchoolSelect model sf =
                     "ecc-field"
     in
     div [ class cls ]
-        ([ select
-            [ id "stf-schoolId"
-            , onInput (UpdatedStudentFormField "schoolId")
-            , disabled sf.submitting
-            ]
-            (option [ value "", Attr.selected (sf.schoolId == "") ]
-                [ text "No school linked" ]
-                :: List.map
-                    (\s ->
-                        option
-                            [ value s.id, Attr.selected (sf.schoolId == s.id) ]
-                            [ text s.name ]
-                    )
-                    options
-            )
+        ([ RecordPicker.view "stf-schoolId" "schools" sf.schoolId "School" sf.submitting (UpdatedStudentFormField "schoolId")
          , label [ for "stf-schoolId" ] [ text "School" ]
          ]
             ++ (case err of
@@ -832,32 +795,8 @@ studentSchoolSelect model sf =
 
 
 studentAgentSelect : Model -> StudentForm -> Html Msg
-studentAgentSelect model sf =
+studentAgentSelect _ sf =
     let
-        options =
-            let
-                loaded =
-                    case model.agents of
-                        Success data ->
-                            data.items
-
-                        _ ->
-                            []
-
-                current =
-                    case model.viewingAgent of
-                        Just agent ->
-                            if List.any (\item -> item.id == agent.id) loaded then
-                                []
-
-                            else
-                                [ agent ]
-
-                        Nothing ->
-                            []
-            in
-            List.sortBy .name (loaded ++ current)
-
         err =
             studentFormFieldError "agentId" sf
 
@@ -870,21 +809,7 @@ studentAgentSelect model sf =
                     "ecc-field"
     in
     div [ class cls ]
-        ([ select
-            [ id "stf-agentId"
-            , onInput (UpdatedStudentFormField "agentId")
-            , disabled sf.submitting
-            ]
-            (option [ value "", Attr.selected (sf.agentId == "") ]
-                [ text "No agent linked" ]
-                :: List.map
-                    (\a ->
-                        option
-                            [ value a.id, Attr.selected (sf.agentId == a.id) ]
-                            [ text a.name ]
-                    )
-                    options
-            )
+        ([ RecordPicker.view "stf-agentId" "agents" sf.agentId "Agent" sf.submitting (UpdatedStudentFormField "agentId")
          , label [ for "stf-agentId" ] [ text "Agent" ]
          ]
             ++ (case err of

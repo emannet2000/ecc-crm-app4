@@ -15,6 +15,11 @@ func handleOperationalAttention(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 403, "Manager access is required")
 		return
 	}
+	r, close, ok := consolidatedReadSnapshot(w, r)
+	if !ok {
+		return
+	}
+	defer close()
 	org := currentUser(r).OrgID
 	counts := map[string]int{}
 	checks := map[string]string{

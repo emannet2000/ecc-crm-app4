@@ -27,6 +27,7 @@ yarn.lock
 .env.*.local
 
 # Build artifacts
+/backend
 build/
 dist/
 public/elm.js

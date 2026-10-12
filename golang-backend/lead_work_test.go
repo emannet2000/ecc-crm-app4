@@ -268,3 +268,47 @@ func TestRequirementChecklistPlansKeepAccessAndRevisionChecks(t *testing.T) {
 		t.Fatal("private checklist requirement leaked")
 	}
 }
+
+func TestRequirementFollowupFilterDates(t *testing.T) {
+	setupStore(t)
+	h := leadIntakeMux()
+	cookies := demoCookies(t, h)
+	c := cases[0]
+	var initial struct{ Today string }
+	w := featureRequest(h, "GET", "/api/cases/"+c.ID+"/blockers", nil, cookies)
+	assertStatus(t, w, 200)
+	if err := json.Unmarshal(w.Body.Bytes(), &initial); err != nil {
+		t.Fatal(err)
+	}
+	day, err := time.Parse("2006-01-02", initial.Today)
+	if err != nil {
+		t.Fatal(err)
+	}
+	date := func(delta int) string { return day.AddDate(0, 0, delta).Format("2006-01-02") }
+	mu.Lock()
+	documents = []Document{
+		{RecordScope: c.RecordScope, ID: "missing", CaseID: c.ID, DocName: "Missing", Required: true, Status: "Requested", DueDate: date(-1)},
+		{RecordScope: c.RecordScope, ID: "today", CaseID: c.ID, DocName: "Today", Required: true, Status: "Verified", FilePath: "/file", ExpiryDate: date(0)},
+		{RecordScope: c.RecordScope, ID: "boundary", CaseID: c.ID, DocName: "Boundary", Required: true, Status: "Verified", FilePath: "/file", ExpiryDate: date(30)},
+		{RecordScope: c.RecordScope, ID: "later", CaseID: c.ID, DocName: "Later", Required: true, Status: "Verified", FilePath: "/file", ExpiryDate: date(31)},
+		{RecordScope: c.RecordScope, ID: "expired", CaseID: c.ID, DocName: "Expired", Required: true, Status: "Verified", FilePath: "/file", ExpiryDate: date(-1)},
+		{RecordScope: c.RecordScope, ID: "due-today", CaseID: c.ID, DocName: "Due today", Required: true, Status: "Requested", DueDate: date(0)},
+	}
+	mu.Unlock()
+	w = featureRequest(h, "GET", "/api/cases/"+c.ID+"/blockers", nil, cookies)
+	assertStatus(t, w, 200)
+	var out struct{ Checklist []RequirementChecklist }
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatal(err)
+	}
+	rows := map[string]RequirementChecklist{}
+	for _, row := range out.Checklist {
+		rows[row.ID] = row
+	}
+	if !rows["missing"].Missing || !rows["missing"].Overdue || rows["due-today"].Overdue {
+		t.Fatal("missing and overdue rules incorrect")
+	}
+	if !rows["today"].Expiring || !rows["boundary"].Expiring || rows["later"].Expiring || rows["expired"].Expiring || rows["today"].Missing {
+		t.Fatal("expiry boundaries incorrect")
+	}
+}

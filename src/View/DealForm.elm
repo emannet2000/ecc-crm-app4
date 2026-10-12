@@ -8,6 +8,7 @@ import Html.Attributes as Attr exposing (class, disabled, for, id, placeholder, 
 import Html.Events exposing (onClick, onInput, onSubmit)
 import Json.Decode as D
 import Types exposing (..)
+import View.RecordPicker as RecordPicker
 import View.StaffPicker as StaffPicker
 import View.Deals exposing (dealStageOptions)
 import View.Helpers exposing (svgIcon, svgPath)
@@ -48,11 +49,8 @@ contactsForSelect model =
 
 
 dealContactSelect : Model -> DealForm -> Html Msg
-dealContactSelect model df =
+dealContactSelect _ df =
     let
-        contactOpts =
-            contactsForSelect model
-
         err =
             dealFormFieldError "contactId" df
 
@@ -65,21 +63,7 @@ dealContactSelect model df =
                     "ecc-field"
     in
     div [ class cls ]
-        ([ select
-            [ id "df-contactId"
-            , onInput (UpdatedDealFormField "contactId")
-            , disabled df.submitting
-            ]
-            (option [ value "", Attr.selected (df.contactId == "") ]
-                [ text "No contact linked" ]
-                :: List.map
-                    (\c ->
-                        option
-                            [ value c.id, Attr.selected (df.contactId == c.id) ]
-                            [ text c.name ]
-                    )
-                    contactOpts
-            )
+        ([ RecordPicker.view "df-contactId" "contacts" df.contactId "Contact" df.submitting (UpdatedDealFormField "contactId")
          , label [ for "df-contactId" ] [ text "Contact" ]
          ]
             ++ (case err of

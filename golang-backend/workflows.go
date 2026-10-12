@@ -404,6 +404,8 @@ func (state *runtimeStore) handleWorkflow(w http.ResponseWriter, r *http.Request
 					fail("Partner not found")
 					return
 				}
+			}
+			if _, provided := req["partnerId"]; provided {
 				c.PartnerID = partner
 			}
 			c.ParentCaseID = parent

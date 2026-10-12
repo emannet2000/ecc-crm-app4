@@ -96,3 +96,93 @@ priorities belong to `public/usability.js`. Continue consolidating by behavior
 when editing those screens. Keep lifecycle cleanup and meaningful interaction
 checks with each move, and avoid changing backend permission enforcement during
 frontend reorganization.
+
+## Daily-work and dashboard measurement — 2026-10-12
+
+Current implementation, Linux/amd64, Intel Core i5-2415M at 2.30 GHz,
+parallelism 4, three measured iterations using the same 5,000-record fixture.
+
+| Operation | Mean request time | Bytes per request | Allocations per request |
+| --- | ---: | ---: | ---: |
+| Dashboard report aggregates | 292.3 ms | 41,716,333 | 218,871 |
+| Daily work totals and first page | 246.4 ms | 64,664,717 | 188,473 |
+
+Daily work reads only the scoped entities needed for its list and totals.
+Dashboard creation counts use decoded records without serializing the workspace
+again. The first Home work list requests ten items; secondary summary loads wait
+for the work list or a 1.5-second fallback. Record visibility regression tests
+remain part of backend verification.
+
+The earlier baseline used different hardware, so these results do not establish
+a before/after speedup. Browser measurements are recorded separately by
+`node --test tests/improvements.browser.cjs` in
+`tests/artifacts/improvements-timing.json`; that browser fixture uses demo data,
+not the 5,000-record benchmark dataset. Neither measurement establishes production
+percentiles.
+
+The final desktop/phone browser verification measured navigation to usable Home
+work at 279.8 ms and its daily-work request at 106.3 ms (3,122 transferred bytes,
+ten requested items). An earlier local run measured 332.2 ms and 108.8 ms,
+respectively. These are individual demo-data observations, not percentiles or a
+controlled browser before/after comparison.
+
+## Workspace aggregation comparison — 2026-10-12
+
+Linux/amd64, Intel Core i5-2415M at 2.30 GHz, parallelism 4, three iterations
+per operation on the same 5,000-contact/application/document workload. The
+isolated baseline source reverses this cycle's backend aggregation changes.
+Before and after benchmarks ran sequentially; short means remain sensitive to
+machine load and do not establish production percentiles.
+
+| Operation | Before mean | After mean | Before bytes/request | After bytes/request |
+| --- | ---: | ---: | ---: | ---: |
+| Dashboard reports | 285.6 ms | 177.8 ms | 41,716,240 | 27,588,482 |
+| Daily work | 270.1 ms | 249.5 ms | 64,664,994 | 50,132,189 |
+| Workspace priorities | 1,655.1 ms | 262.8 ms | 167,207,696 | 41,697,328 |
+| Operational attention | 495.3 ms | 0.78 ms | 113,665,538 | 26,645 |
+
+Allocation profiles identified decoded workspace records, repeated copies of
+full applications, construction of unused overview rows and repeated document
+parent scans. Summary reports and priorities now read only their required
+entities. Daily work reuses its document slice, indexes parents by reference,
+and constructs overview rows only for the requested category while preserving
+all counts. Operational reporting indexes document parents instead of scanning
+all applications for every document. Priorities and operational attention use
+independent SQL reads; attention keeps related queries in a read snapshot.
+
+The optional Home AI brief now checks assistant capabilities instead of fetching
+the full control-center payload. Workspace Files renders 25 rows per page while
+filter counts cover its full accessible dataset. These frontend changes are
+shared by both browser runs, so the browser comparison isolates backend changes.
+
+Reproduce current backend measurements with:
+
+```sh
+cd golang-backend
+go test -run '^$' -bench 'BenchmarkRepositoryWorkload/(daily-work|dashboard-reports|workspace-priorities|operations-attention)$' -benchtime=3x -benchmem
+```
+
+For complete-page measurements, `npm run test:workspace-next` seeds 5,000
+contacts, applications and required documents with 20% in another workspace,
+then measures three authenticated Home loads. It records navigation load time,
+time until daily work is usable, time until all Home summaries finish, request
+durations and transferred bytes in `tests/artifacts/next-workspace-report.json`.
+Set `ECC_BASELINE_BINARY` to an isolated baseline server binary to compare both
+backends with the same current frontend. Timing boundaries are automation-observed
+readiness, including polling overhead; they are not browser paint measurements.
+Browser validation and backup restoration use synthetic data and remain distinct
+from actual staff sessions and deployment-specific provider acceptance.
+
+The final sequential representative browser comparison recorded:
+
+| Home readiness | Before median (3 loads) | After median (3 loads) |
+| --- | ---: | ---: |
+| Usable daily-work list | 1308.8 ms | 1237.4 ms |
+| All Home summaries ready | 3495.0 ms | 1528.2 ms |
+
+The first after load took 7,700.5 ms to usable work and 7,973.7 ms to all
+summaries, while its next two summary loads took 1,380.2 and 1,528.2 ms. The
+outlier is retained in the report. Faster backend aggregation does not establish
+uniform cold-load performance; deployment traces and larger samples are needed
+before setting a loading target. Both runs use the same current frontend and
+fresh copies of the same synthetic database.

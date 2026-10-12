@@ -86,3 +86,7 @@ summary { cursor:pointer; font-weight:650; font-size:14px; }
 
 .communication-compose{display:grid;gap:12px;max-width:760px}.communication-compose label{display:grid;gap:6px}.message-body{white-space:pre-wrap}.bulk-contact-choice{display:flex;align-items:center;gap:10px;padding:12px 4px;border-bottom:1px solid var(--border)}.bulk-contact-choice input{width:auto;min-height:24px;flex:0 0 auto}.communication-workspace article form{display:grid;gap:10px}
 .bulk-contact-choice{overflow-wrap:anywhere}.card button{max-width:100%;overflow-wrap:anywhere}
+
+nav.workspace-groups{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));overflow:visible;gap:16px} .workspace-nav-group{min-width:0}.workspace-nav-group h3{font-size:13px;margin:0 0 8px;color:var(--muted)}.workspace-nav-links{display:flex;flex-wrap:wrap;gap:6px}.workspace-nav-links button{white-space:normal;text-align:left;min-height:44px}@media(max-width:600px){nav.workspace-groups{grid-template-columns:1fr 1fr;gap:12px}.workspace-nav-links{flex-direction:column}.workspace-nav-links button{width:100%}}
+
+nav[aria-label="Document filters"],nav[aria-label="Document follow-up filters"]{flex-wrap:wrap;overflow:visible}

@@ -18,6 +18,7 @@ routeParser =
         , Parser.map DealDetail (s "deals" </> string)
         , Parser.map Tasks (s "tasks")
         , Parser.map Reports (s "reports")
+        , Parser.map Chat (s "chat")
         , Parser.map Workspace (s "workspace")
         , Parser.map Administration (s "administration")
         , Parser.map Settings (s "settings")
@@ -63,6 +64,9 @@ routeToPath route =
 
         Tasks ->
             "/tasks"
+
+        Chat ->
+            "/chat"
 
         Workspace ->
             "/workspace"

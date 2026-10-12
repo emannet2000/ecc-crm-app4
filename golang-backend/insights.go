@@ -13,52 +13,124 @@ import (
 func sqlWorkspace(r *http.Request) (diskStore, error) {
 	var s diskStore
 	var err error
-	if s.Contacts, err = readScopedRows[Contact](r, "contacts"); err != nil {
+	if s.Contacts, err = readVisibleReportRows[Contact](r, "contacts"); err != nil {
 		return s, err
 	}
-	if s.Deals, err = readScopedRows[Deal](r, "deals"); err != nil {
+	if s.Deals, err = readVisibleReportRows[Deal](r, "deals"); err != nil {
 		return s, err
 	}
-	if s.Activities, err = readScopedRows[Activity](r, "activities"); err != nil {
+	if s.Activities, err = readVisibleReportRows[Activity](r, "activities"); err != nil {
 		return s, err
 	}
-	if s.Tasks, err = readScopedRows[Task](r, "tasks"); err != nil {
+	if s.Tasks, err = readVisibleReportRows[Task](r, "tasks"); err != nil {
 		return s, err
 	}
-	if s.Schools, err = readScopedRows[School](r, "schools"); err != nil {
+	if s.Schools, err = readVisibleReportRows[School](r, "schools"); err != nil {
 		return s, err
 	}
-	if s.Students, err = readScopedRows[Student](r, "students"); err != nil {
+	if s.Students, err = readVisibleReportRows[Student](r, "students"); err != nil {
 		return s, err
 	}
-	if s.Agents, err = readScopedRows[Agent](r, "agents"); err != nil {
+	if s.Agents, err = readVisibleReportRows[Agent](r, "agents"); err != nil {
 		return s, err
 	}
-	if s.Leads, err = readScopedRows[Lead](r, "leads"); err != nil {
+	if s.Leads, err = readVisibleReportRows[Lead](r, "leads"); err != nil {
 		return s, err
 	}
-	if s.Cases, err = readScopedRows[Case](r, "cases"); err != nil {
+	if s.Cases, err = readVisibleReportRows[Case](r, "cases"); err != nil {
 		return s, err
 	}
-	if s.Documents, err = readScopedRows[Document](r, "documents"); err != nil {
+	if s.Documents, err = readVisibleReportRows[Document](r, "documents"); err != nil {
 		return s, err
 	}
-	if s.Invoices, err = readScopedRows[Invoice](r, "invoices"); err != nil {
+	if s.Invoices, err = readVisibleReportRows[Invoice](r, "invoices"); err != nil {
 		return s, err
 	}
-	if s.Payments, err = readScopedRows[Payment](r, "payments"); err != nil {
+	if s.Payments, err = readVisibleReportRows[Payment](r, "payments"); err != nil {
 		return s, err
 	}
-	if s.Partners, err = readScopedRows[Partner](r, "partners"); err != nil {
+	if s.Partners, err = readVisibleReportRows[Partner](r, "partners"); err != nil {
 		return s, err
 	}
 
-	return projectedStore(s, currentUser(r)), nil
+	return s, nil
+}
+
+// Summary reports do not use activities, documents, payments or partner catalogs.
+func sqlSummaryWorkspace(r *http.Request) (diskStore, error) {
+	var s diskStore
+	var err error
+	if s.Contacts, err = readVisibleReportRows[Contact](r, "contacts"); err != nil {
+		return s, err
+	}
+	if s.Deals, err = readVisibleReportRows[Deal](r, "deals"); err != nil {
+		return s, err
+	}
+	if s.Tasks, err = readVisibleReportRows[Task](r, "tasks"); err != nil {
+		return s, err
+	}
+	if s.Schools, err = readVisibleReportRows[School](r, "schools"); err != nil {
+		return s, err
+	}
+	if s.Students, err = readVisibleReportRows[Student](r, "students"); err != nil {
+		return s, err
+	}
+	if s.Agents, err = readVisibleReportRows[Agent](r, "agents"); err != nil {
+		return s, err
+	}
+	if s.Leads, err = readVisibleReportRows[Lead](r, "leads"); err != nil {
+		return s, err
+	}
+	if s.Cases, err = readVisibleReportRows[Case](r, "cases"); err != nil {
+		return s, err
+	}
+	if s.Invoices, err = readVisibleReportRows[Invoice](r, "invoices"); err != nil {
+		return s, err
+	}
+	return s, nil
+}
+
+// Priority queues need action plans, document issues and invoice/receipt totals.
+func sqlPriorityWorkspace(r *http.Request) (diskStore, error) {
+	var s diskStore
+	var err error
+	if s.Deals, err = readVisibleReportRows[Deal](r, "deals"); err != nil {
+		return s, err
+	}
+	if s.Students, err = readVisibleReportRows[Student](r, "students"); err != nil {
+		return s, err
+	}
+	if s.Leads, err = readVisibleReportRows[Lead](r, "leads"); err != nil {
+		return s, err
+	}
+	if s.Cases, err = readVisibleReportRows[Case](r, "cases"); err != nil {
+		return s, err
+	}
+	if s.Documents, err = readVisibleReportRows[Document](r, "documents"); err != nil {
+		return s, err
+	}
+	if s.Invoices, err = readVisibleReportRows[Invoice](r, "invoices"); err != nil {
+		return s, err
+	}
+	if s.Payments, err = readVisibleReportRows[Payment](r, "payments"); err != nil {
+		return s, err
+	}
+	return s, nil
+}
+
+// Reports share list visibility checks, including parent records, before decoding.
+func readVisibleReportRows[T any](r *http.Request, entity string) ([]T, error) {
+	clause, args := repositoryVisibility(r, entity)
+	return decodeScopedRows[T](r, "SELECT record.data FROM "+entity+" record WHERE "+clause+" ORDER BY record.sort_order,record.id", args)
 }
 
 func readScopedRows[T any](r *http.Request, entity string) ([]T, error) {
 	clause, args := scopeSQL(r, "data")
-	rows, err := storeDB(r).Query("SELECT data FROM "+entity+" WHERE "+clause+" ORDER BY sort_order,id", args...)
+	return decodeScopedRows[T](r, "SELECT data FROM "+entity+" WHERE "+clause+" ORDER BY sort_order,id", args)
+}
+
+func decodeScopedRows[T any](r *http.Request, query string, args []any) ([]T, error) {
+	rows, err := storeDB(r).Query(query, args...)
 	if err != nil {
 		return nil, err
 	}

@@ -55,9 +55,68 @@
    }
   }).catch(e=>{notice.textContent=e.message});
  }
+ function readiness(main,{request,role}){
+  const section=node('section',null,{class:'card'});
+  section.append(node('h2','Start your day'),node('p','Choose your workflow. Record access and finance permissions still apply.'));
+  const guides=[
+   ['Advising','Review today’s priorities, open the application, check missing documents, and save a next action and deadline. Use Ownership and handoffs when responsibility changes.','/','My work today'],
+   ['Finance','Open the client’s invoice, check its balance, record the receipt and review any approval before reconciling the statement.','/invoices','Invoices & payments'],
+   ['Management','Review overdue actions, missing plans and pending handoffs. Resolve the highest-impact exception first.','/workspace?tab=priorities','Work priorities'],
+   ['New inquiry','Create the lead once, attach its CV or supporting files, and review conversion into a client or student/application. Reuse the linked client profile.','/leads','Leads']
+  ];
+  const order=role==='admin'||role==='manager'?[2,0,1,3]:[0,3,1];
+  for(const i of order){const[title,description,href,label]=guides[i],card=node('article',null,{class:'card'});card.append(node('h3',title),node('p',description),node('a',label,{href}));section.append(card)}
+  if(role==='viewer')section.append(node('p','Your access is read-only. Ask the record owner to make changes.'));
+  section.append(node('a','Choose your navigation focus in the sidebar',{href:'#workspace-navigation'}));main.append(section);
+  if(role!=='admin')return;
+  const status=node('section',null,{class:'card'}),notice=node('p','',{role:'status','aria-live':'polite'}),content=node('div');
+  const refresh=node('button','Refresh readiness',{type:'button',class:'secondary'});
+  status.append(node('h2','Administrator readiness'),node('p','Review setup, recent failures and recovery evidence. A connection check does not establish live delivery or production readiness.'),refresh,notice,content);main.append(status);
+  let generation=0;
+  const load=async()=>{
+   const current=++generation;refresh.disabled=true;notice.textContent='Checking workspace readiness…';
+   // Each section can succeed independently, so a failed check never hides the other evidence.
+   const results=await Promise.allSettled([request('/api/integrations/status'),request('/api/admin/operations')]);
+   if(!status.isConnected||current!==generation)return;
+   content.replaceChildren();
+   const add=(title,description,label,href)=>{const card=node('article',null,{class:'card'});card.append(node('h3',title),node('p',description),node('a',label,{href}));content.append(card)};
+   if(results[0].status==='fulfilled')for(const item of results[0].value.integrations||[])add(item.name+' · '+item.state.replaceAll('_',' '),item.message+(item.checkedAt?' Last connection check: '+item.checkedAt:''),'Review connection','/workspace?tab=integrations');
+   else add('Integration status unavailable',results[0].reason.message,'Open integrations','/workspace?tab=integrations');
+   if(results[1].status==='fulfilled'){
+    const out=results[1].value,backup=out.backup||{},verified=backup.restoreVerification||{};
+    add('Backup · '+(backup.state||'unknown'),'Last backup check: '+(backup.checkedAt||'Not recorded')+'. Isolated restore: '+(verified.state||'Not verified')+'. '+(backup.message||''),'Review backup & restore','/workspace?tab=recovery');
+    add('Email delivery',(out.mail?.failed||0)+' failed; '+(out.mail?.waitingConfiguration||0)+' waiting for configuration.','Review messages','/workspace?tab=communication&channel=email');
+    for(const alert of out.alerts||[])content.append(node('p',alert));
+    const workers=node('details');workers.append(node('summary','Background job status'));for(const[name,worker]of Object.entries(out.workers||{}))workers.append(node('p',name+' · '+worker.state));content.append(workers);
+   }else add('Operational status unavailable',results[1].reason.message,'Open backup & restore','/workspace?tab=recovery');
+   add('Team and workspace setup','Set the workspace timezone and currency, invite staff, and review their roles before assigning work.','Manage people and access','/administration');
+   notice.textContent=results.some(r=>r.status==='rejected')?'Some checks failed. Use Refresh readiness to retry.':'Status refreshed. Complete live provider checks and staff workflow sessions before treating setup as accepted.';refresh.disabled=false;
+  };
+  refresh.onclick=load;load();
+ }
  class Outcomes extends HTMLElement{
-  connectedCallback(){if(this.loaded)return;this.loaded=true;const render=async()=>{try{const res=await fetch('/api/work-outcomes',{credentials:'same-origin'}),out=await res.json();if(!res.ok)throw new Error(out.error||'Could not load outcomes');if(!this.isConnected)return;this.replaceChildren(node('h2','Work needing attention'));const links=[['unansweredMessages','Unanswered messages','/workspace?tab=communication&handling=needs_reply'],['overdueReplies','Overdue replies','/workspace?tab=communication'],['overdueTasks','Overdue tasks','/tasks'],['overdueApplications','Overdue application actions','/cases']];for(const[key,label,url]of links)this.append(node('a',`${label}: ${out[key]}`,{href:url,class:'card'}));this.append(node('h3','Collections this month'));for(const r of out.collectionsThisMonth||[])this.append(node('p',`${r.currency} ${Number(r.amount).toFixed(2)}`));if(!(out.collectionsThisMonth||[]).length)this.append(node('p','No posted collections this month.'));}catch(e){this.replaceChildren(node('p',e.message))}};render();const retry=node('button','Refresh outcomes',{type:'button'});retry.onclick=render;this.append(retry)}
+  connectedCallback(){
+   if(this.loaded)return;this.loaded=true;this.generation=0;
+   this.content=node('div');const refresh=node('button','Refresh outcomes',{type:'button'});
+   const render=async()=>{const generation=++this.generation;refresh.disabled=true;window.CRMHomeSummary?.update(this,'Loading…');try{
+    const res=await fetch('/api/work-outcomes',{credentials:'same-origin'}),out=await res.json();
+    if(!res.ok)throw new Error(out.error||'Could not load outcomes');
+    if(!this.isConnected||generation!==this.generation)return;
+    window.CRMHomeSummary?.update(this,`${out.unansweredMessages||0} unanswered messages · ${out.overdueReplies||0} overdue replies · ${out.overdueTasks||0} overdue tasks · ${out.overdueApplications||0} overdue applications`);
+    this.content.replaceChildren(node('h2','Work needing attention'));
+    const links=[['unansweredMessages','Unanswered messages','/workspace?tab=communication&handling=needs_reply'],['overdueReplies','Overdue replies','/workspace?tab=communication'],['overdueTasks','Overdue tasks','/tasks'],['overdueApplications','Overdue application actions','/cases']];
+    for(const[key,label,url]of links)this.content.append(node('a',`${label}: ${out[key]}`,{href:url,class:'card'}));
+    if(!this.hasAttribute('attention-only')){
+    this.content.append(node('h3','Collections this month'));
+    for(const r of out.collectionsThisMonth||[])this.content.append(node('p',`${r.currency} ${Number(r.amount).toFixed(2)}`));
+    if(!(out.collectionsThisMonth||[]).length)this.content.append(node('p','No posted collections this month.'));
+    }
+   }catch(e){if(this.isConnected&&generation===this.generation){this.content.replaceChildren(node('p',e.message+' Use Refresh outcomes to retry.',{role:'status'}));window.CRMHomeSummary?.update(this,'Unavailable · open to retry')}}
+   finally{if(generation===this.generation)refresh.disabled=false}};
+   refresh.onclick=render;this.append(refresh,this.content);if(window.CRMHomeSummary)window.CRMHomeSummary.schedule(this,render);else render();this.changed=()=>render();window.addEventListener('crm:record-changed',this.changed);
+  }
+  disconnectedCallback(){this.summaryCleanup?.();window.removeEventListener('crm:record-changed',this.changed);this.generation++;this.loaded=false;this.replaceChildren()}
  }
  if(!customElements.get('crm-work-outcomes'))customElements.define('crm-work-outcomes',Outcomes);
- window.CRMEveryday={handling,profile,consultations,finance};
+ window.CRMEveryday={handling,profile,consultations,finance,readiness};
 })();

@@ -1,4 +1,4 @@
-module View.Icons exposing (eccMark, iconAgent, iconBack, iconCalendar, iconContacts, iconDeals, iconEdit, iconHome, iconLead, iconMail, iconMoon, iconPhone, iconPin, iconRefresh, iconReports, iconSchool, iconSearch, iconSettings, iconSignOut, iconStudent, iconSun, iconTasks, iconTrash, iconUserTiny)
+module View.Icons exposing (eccMark, iconAgent, iconBack, iconCalendar, iconChat, iconContacts, iconDeals, iconEdit, iconHome, iconLead, iconMail, iconMoon, iconPhone, iconPin, iconRefresh, iconReports, iconSchool, iconSearch, iconSettings, iconSignOut, iconStudent, iconSun, iconTasks, iconTrash, iconUserTiny)
 
 {-| Brand mark and all SVG icons.
 -}
@@ -480,3 +480,18 @@ iconSearch =
 iconRefresh : Html Msg
 iconRefresh =
     outlineIcon [ "M20 7v5h-5", "M4 17v-5h5", "M6.1 6.1A8 8 0 0 1 19.3 9L20 12M4 12l.7 3A8 8 0 0 0 17.9 17.9" ]
+
+
+iconChat : Html Msg
+iconChat =
+    svgIcon
+        [ Attr.attribute "viewBox" "0 0 24 24"
+        , Attr.attribute "width" "18"
+        , Attr.attribute "height" "18"
+        , Attr.attribute "fill" "none"
+        , Attr.attribute "stroke" "currentColor"
+        , Attr.attribute "stroke-width" "1.8"
+        , Attr.attribute "stroke-linecap" "round"
+        , Attr.attribute "stroke-linejoin" "round"
+        ]
+        [ svgPath "M21 11.5a8.4 8.4 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.4 8.4 0 0 1-3.8-.9L3 21l1.9-5.7a8.4 8.4 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6A8.4 8.4 0 0 1 12.5 3H13a8.5 8.5 0 0 1 8 8v.5Z" ]

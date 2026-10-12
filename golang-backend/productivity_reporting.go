@@ -92,35 +92,41 @@ func operationalReport(s diskStore, today string, lastStage map[string]time.Time
 			}
 		}
 	}
-	// These documents are already scoped with parent visibility by sqlWorkspace.
+	// Parent indexes avoid scanning every application for each document.
+	caseByID := make(map[string]*Case, len(s.Cases))
+	for i := range s.Cases {
+		caseByID[s.Cases[i].ID] = &s.Cases[i]
+	}
+	leadByID := make(map[string]*Lead, len(s.Leads))
+	for i := range s.Leads {
+		leadByID[s.Leads[i].ID] = &s.Leads[i]
+	}
 	for _, d := range s.Documents {
-		if _, _, needed := documentIssue(d, today); needed {
-			assigned := d.ResponsibleID
-			active := false
-			for _, c := range s.Cases {
-				if c.ID == d.CaseID && activeApplication(c.CurrentStage) {
-					active = true
-					if assigned == "" {
-						assigned = c.AssignedOfficer
-					}
-				}
-			}
-			for _, l := range s.Leads {
-				if d.CaseID == "" && l.ID == d.LeadID && openLead(l.Status) {
-					active = true
-					if assigned == "" {
-						assigned = l.AssignedTo
-					}
-				}
-			}
-			if active {
+		if _, _, needed := documentIssue(d, today); !needed {
+			continue
+		}
+		assigned, active := d.ResponsibleID, false
+		if d.CaseID != "" {
+			if c, ok := caseByID[d.CaseID]; ok && activeApplication(c.CurrentStage) {
+				active = true
 				if assigned == "" {
-					assigned = d.OwnerID
+					assigned = c.AssignedOfficer
 				}
-				owner(assigned).Documents++
+			}
+		} else if l, ok := leadByID[d.LeadID]; ok && openLead(l.Status) {
+			active = true
+			if assigned == "" {
+				assigned = l.AssignedTo
 			}
 		}
+		if active {
+			if assigned == "" {
+				assigned = d.OwnerID
+			}
+			owner(assigned).Documents++
+		}
 	}
+
 	totals := map[string]*CollectionSummary{}
 	invoices := map[string]Invoice{}
 	for _, inv := range s.Invoices {

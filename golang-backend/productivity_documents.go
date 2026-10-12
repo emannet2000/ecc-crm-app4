@@ -28,12 +28,14 @@ func documentIssue(d Document, today string) (string, string, bool) {
 }
 func dailyDocumentItems(user User, s diskStore, today, filter string) []productivityItem {
 	out := []productivityItem{}
-	cases := map[string]Case{}
-	leads := map[string]Lead{}
-	for _, c := range s.Cases {
+	cases := make(map[string]*Case, len(s.Cases))
+	leads := make(map[string]*Lead, len(s.Leads))
+	for i := range s.Cases {
+		c := &s.Cases[i]
 		cases[c.ID] = c
 	}
-	for _, l := range s.Leads {
+	for i := range s.Leads {
+		l := &s.Leads[i]
 		leads[l.ID] = l
 	}
 	for _, d := range s.Documents {

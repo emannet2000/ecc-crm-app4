@@ -152,5 +152,5 @@ func handleApplicationBlockers(w http.ResponseWriter, r *http.Request) {
 		}
 		enriched = append(enriched, row)
 	}
-	writeJSON(w, 200, map[string]any{"items": enriched, "checklist": checklist, "requiredCount": len(checklist), "completedCount": completed, "owner": c.AssignedOfficer, "nextAction": c.NextAction, "deadline": c.NextDeadline, "blockingCount": blocking, "autoAdvance": c.AutoAdvance, "scope": "Accessible application records"})
+	writeJSON(w, 200, map[string]any{"items": enriched, "checklist": checklist, "requiredCount": len(checklist), "completedCount": completed, "owner": c.AssignedOfficer, "nextAction": c.NextAction, "deadline": c.NextDeadline, "blockingCount": blocking, "autoAdvance": c.AutoAdvance, "scope": "Accessible application records", "today": today})
 }

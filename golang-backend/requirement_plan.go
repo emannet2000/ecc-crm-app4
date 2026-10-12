@@ -18,6 +18,8 @@ type RequirementChecklist struct {
 	Status          string              `json:"status"`
 	Attention       string              `json:"attention"`
 	ExpiryDate      string              `json:"expiryDate"`
+	Missing         bool                `json:"missing"`
+	Expiring        bool                `json:"expiring"`
 	Complete        bool                `json:"complete"`
 	ResponsibleID   string              `json:"responsibleId"`
 	Responsible     string              `json:"responsible"`
@@ -75,6 +77,9 @@ func documentChecklist(r *http.Request, c Case, docs []Document, today string) (
 		row := RequirementChecklist{ID: doc.ID, Title: doc.DocName, Status: doc.Status, Complete: doc.FilePath != "" && !documentNeedsReview(doc, today), ResponsibleID: doc.ResponsibleID, Responsible: c.AssignedOfficer, DueDate: doc.DueDate, DocumentDueDate: doc.DueDate, DeadlineSource: "Document deadline", Editable: canWrite(doc.RecordScope, currentUser(r)) && canWrite(c.RecordScope, currentUser(r)), Revision: versionOf(record), Route: "/cases/" + c.ID + "#record-tools?tab=documents&document=" + doc.ID, Assignees: []RequirementPerson{}}
 		row.Attention, _, _ = documentIssue(doc, today)
 		row.ExpiryDate = doc.ExpiryDate
+		row.Missing = doc.FilePath == ""
+		day, _ := time.Parse("2006-01-02", today)
+		row.Expiring = doc.ExpiryDate != "" && doc.ExpiryDate >= today && doc.ExpiryDate <= day.AddDate(0, 0, 30).Format("2006-01-02")
 		if row.DueDate == "" {
 			row.DueDate = c.NextDeadline
 			row.DeadlineSource = "Application next-action deadline"

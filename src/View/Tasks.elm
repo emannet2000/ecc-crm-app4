@@ -8,6 +8,7 @@ import Html.Attributes as Attr exposing (class, disabled, for, id, placeholder, 
 import Html.Events exposing (onClick, onInput, onSubmit)
 import Json.Decode as D
 import Types exposing (..)
+import View.RecordPicker as RecordPicker
 import View.DealForm exposing (contactsForSelect)
 import View.Icons exposing (iconEdit, iconTrash)
 
@@ -328,16 +329,7 @@ taskFormModal model tf =
                         ]
                     , div [ class "ecc-field" ]
                         [ span [ class "ecc-field__label" ] [ text "Contact" ]
-                        , select
-                            [ id "tf-contact"
-                            , onInput (UpdatedTaskFormField "contactId")
-                            , disabled tf.submitting
-                            ]
-                            (option [ value "", Attr.selected (tf.contactId == "") ] [ text "— None —" ]
-                                :: List.map
-                                    (\c -> option [ value c.id, Attr.selected (tf.contactId == c.id) ] [ text c.name ])
-                                    allContacts
-                            )
+                        , RecordPicker.view "tf-contact" "contacts" tf.contactId "Contact" tf.submitting (UpdatedTaskFormField "contactId")
                         ]
                     , div [ class "ecc-field" ]
                         [ span [ class "ecc-field__label" ] [ text "Status" ]

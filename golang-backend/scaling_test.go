@@ -64,7 +64,7 @@ func BenchmarkRecordReads(b *testing.B) {
 // 5,000 clients/applications plus another workspace. This is a local baseline,
 // not a declaration of production throughput or multi-process safety.
 func BenchmarkRepositoryWorkload(b *testing.B) {
-	for _, mode := range []string{"paged-list", "search", "application-load", "application-requirements", "dashboard-reports", "daily-work", "validated-write"} {
+	for _, mode := range []string{"paged-list", "search", "application-load", "application-requirements", "dashboard-reports", "daily-work", "workspace-priorities", "operations-attention", "validated-write"} {
 		b.Run(mode, func(b *testing.B) {
 			jwtSecret = []byte("benchmark-only-secret")
 			b.Setenv("LEGACY_DATA_FILE", "")
@@ -93,7 +93,7 @@ func BenchmarkRepositoryWorkload(b *testing.B) {
 			}
 			token, _ := issueToken(u)
 			h := expansionTestMux()
-			if mode == "search" || mode == "dashboard-reports" {
+			if mode == "search" || mode == "dashboard-reports" || mode == "workspace-priorities" || mode == "operations-attention" {
 				h = featureMux()
 			}
 			b.ReportAllocs()
@@ -107,6 +107,10 @@ func BenchmarkRepositoryWorkload(b *testing.B) {
 					path = "/api/records/cases/case-workload-00001"
 				case "application-requirements":
 					path = "/api/cases/case-workload-00001/blockers"
+				case "workspace-priorities":
+					path = "/api/workspace-priorities?queue=unassigned&limit=25"
+				case "operations-attention":
+					path = "/api/operations/attention"
 				case "dashboard-reports":
 					path = "/api/reports"
 				}

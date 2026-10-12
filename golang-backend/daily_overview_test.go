@@ -41,6 +41,11 @@ func TestDailyOverviewIncludesAllStagesAndProtectsScope(t *testing.T) {
 		if out.Total != want || len(out.Items) != want || out.Counts[category] != want || out.Category != category {
 			t.Fatalf("%s: %s", category, w.Body.String())
 		}
+		for key, expected := range map[string]int{"deals": 3, "pipeline": 1, "leads": 2, "students": 1, "cases": 1} {
+			if out.Counts[key] != expected {
+				t.Fatalf("%s count changed when requesting %s: %s", key, category, w.Body.String())
+			}
+		}
 		for _, item := range out.Items {
 			if item.ID == "private-deal" || item.ID == "assigned-other" || item.Route == "" {
 				t.Fatal(w.Body.String())

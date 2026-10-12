@@ -173,3 +173,25 @@ an entire task as a bug.
 Repeat the affected tasks with the same role after each fix. Record completion,
 time, errors and help again. Keep unresolved obstacles open even when automated
 checks pass.
+
+## Navigation and document follow-up retest — 2026-10-12
+
+Status: prepared; actual participants and findings pending. Use a separate
+10-minute follow-up session so the original 20-minute sessions stay practical.
+Record these tasks as **workspace-navigation** and **document-followup** in
+Staff usability, with an anonymous session label, device and observation reference.
+
+- Adviser and finance, 3 minutes: find today's work, then a tool appropriate to
+  the participant's role using Daily work, Finance, Data or Administration.
+  Repeat finding that tool on a phone. Record incorrect group choices and help.
+- Adviser, 5 minutes: find an application's missing files, overdue requirements
+  and documents expiring within 30 days. Assign an accessible staff member and
+  deadline to a test requirement, then reopen it and verify both saved values.
+  Ask the participant to explain how an inherited application deadline differs
+  from a document deadline. Confirm they can reach all document records and uploads.
+- Both, 2 minutes: record confusing labels, repeated information and delays.
+  Distinguish actual staff observations from browser fixtures and local timings.
+
+Prepare missing, overdue, expiring and complete sample requirements. Use the
+workspace date displayed with the filters. Expiring includes today and day 30;
+expired documents need review but do not belong to the future-expiry filter.

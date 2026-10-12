@@ -74,14 +74,14 @@ loginCard model =
     let
         titleText =
             if model.mode == Login then
-                "Sign in to ECC-CRM"
+                "Welcome back"
 
             else
                 "Create your ECC account"
 
         subtitleText =
             if model.mode == Login then
-                "Enter your credentials to access your workspace."
+                "Sign in to your ECC workspace."
 
             else
                 "Set up your account in under a minute."
@@ -116,7 +116,11 @@ loginCard model =
     in
     div [ class "auth-panel" ]
         [ div [ class "auth-panel__inner" ]
-            [ header [ class "auth-header" ]
+            [ div [ class "auth-mobile-brand" ]
+                [ img [ Attr.src "/public/icons/ecc-192.png", Attr.alt "", Attr.width 48, Attr.height 48 ] []
+                , span [] [ text "ECC Workspace" ]
+                ]
+            , header [ class "auth-header" ]
                 [ h1 [ class "auth-title" ] [ text titleText ]
                 , p [ class "auth-subtitle" ] [ text subtitleText ]
                 ]
@@ -155,11 +159,15 @@ loginCard model =
                                     "new-password"
                             }
                        , if model.mode == Login then
-                            label [ class "ecc-field" ]
-                                [ span [] [ text "Authenticator or recovery code (if enabled)" ]
+                            details ([ class "auth-verification" ]
+                                ++ (if model.form.otp /= "" || Maybe.withDefault False (Maybe.map (\alert -> String.contains "code" (String.toLower alert.message) || String.contains "authenticator" (String.toLower alert.message)) model.alert) then
+                                        [ Attr.attribute "open" "" ]
+                                    else
+                                        []
+                                   )
+                                )
+                                [ summary [] [ text "Use an authenticator or recovery code" ]
                                 , input [ type_ "text", Attr.value model.form.otp, Html.Events.onInput UpdatedOTP, Attr.attribute "autocomplete" "one-time-code", Attr.attribute "aria-label" "Authenticator or recovery code" ] []
-                                , a [ Attr.href "/account/forgot", Attr.target "_self" ] [ text "Forgot password?" ]
-                                , a [ Attr.href "/api/sso/start", Attr.target "_self" ] [ text "Sign in with your organization" ]
                                 ]
 
                          else
@@ -205,6 +213,14 @@ loginCard model =
                             ]
                        ]
                 )
+            , if model.mode == Login then
+                div [ class "auth-alternatives" ]
+                    [ a [ Attr.href "/account/forgot" ] [ text "Forgot password?" ]
+                    , a [ Attr.href "/api/sso/start" ] [ text "Sign in with your organization" ]
+                    ]
+
+              else
+                text ""
             , p [ class "auth-switch" ]
                 [ text
                     (if model.mode == Login then
@@ -243,7 +259,7 @@ loginCard model =
                         , svgPath "M7 11V7a5 5 0 0 1 10 0v4"
                         ]
                     ]
-                , text "Protected by 256-bit encryption"
+                , text "ECC Consulting Global"
                 ]
             ]
         ]

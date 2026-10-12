@@ -56,7 +56,7 @@ func handleMetrics(w http.ResponseWriter, r *http.Request) {
 	if total > 0 {
 		average = requestMilliseconds.Load() / total
 	}
-	writeJSON(w, 200, map[string]any{"requests": total, "serverErrors": requestsFailed.Load(), "averageMilliseconds": average, "uptimeSeconds": int(time.Since(startedAt).Seconds()), "database": database.Stats(), "mode": "single-writer cache with independent SQL report and record reads"})
+	writeJSON(w, 200, map[string]any{"requests": total, "serverErrors": requestsFailed.Load(), "averageMilliseconds": average, "uptimeSeconds": int(time.Since(startedAt).Seconds()), "database": database.Stats(), "mode": "SQL request isolation with serialized SQLite writes"})
 }
 
 func handleOperations(w http.ResponseWriter, r *http.Request) {

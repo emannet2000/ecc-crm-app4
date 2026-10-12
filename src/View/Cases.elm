@@ -7,11 +7,12 @@ import Html exposing (..)
 import Html.Attributes as Attr exposing (checked, class, disabled, for, id, placeholder, type_, value)
 import Html.Events exposing (onClick, onInput, onSubmit)
 import Json.Decode as D
+import Json.Encode
 import View.RecordPicker as RecordPicker
 import Types exposing (..)
 import View.StaffPicker as StaffPicker
 import View.Dashboard exposing (ActivityEntry, PriorityAlert, activityPanel, alertsPanel, documentCorrectionAlert, documentEntry, expiredDocumentAlert, urgentCaseAlert)
-import View.Helpers exposing (detailCard, detailEmpty, detailStat, infoRow, initials, onCheck, paginationBar, svgIcon, svgPath)
+import View.Helpers exposing (detailCard, detailEmpty, infoRow, initials, onCheck, paginationBar, svgIcon, svgPath)
 import View.Icons exposing (iconBack, iconCalendar, iconContacts, iconDeals, iconEdit, iconPin, iconTasks, iconTrash, iconUserTiny)
 import View.Workflow exposing (workflowView)
 
@@ -447,7 +448,8 @@ caseDetailView model c =
                 ]
             ]
         , section [ class "application-essentials", Attr.attribute "aria-label" "Application essentials" ]
-            [ h2 [ class "detail-card__title" ] [ text "Owner, next action and due date" ]
+            [ h2 [ class "detail-card__title" ] [ text "Application essentials" ]
+            , p [ class "application-stage" ] [ text ("Stage: " ++ display c.currentStage) ]
             , node "crm-work-plan" [ Attr.attribute "entity" "cases", Attr.attribute "record-id" c.id, id "next-action" ] []
             , button [ class "ecc-btn ecc-btn--ghost ecc-btn--inline", type_ "button", onClick (OpenedEditCase c) ] [ text "Change owner or application details" ]
             , nav [ class "links", Attr.attribute "aria-label" "Application journey" ]
@@ -467,14 +469,11 @@ caseDetailView model c =
             , p [] [ text "Review checklists, service deadlines and linked applications." ]
             , a [ Attr.href "#record-tools?tab=workflows", class "ecc-btn ecc-btn--ghost ecc-btn--inline" ] [ text "Open application tools" ]
             ]
-        , div [ class "detail-stats" ]
-            [ detailStat "Destination" (display c.destinationCountry) "Country"
-            , detailStat "Visa type" (display c.visaType) "Category"
-
-            ]
         , div [ class "detail__grid" ]
             [ aside [ class "detail__sidebar" ]
-                [ detailCard "Application info"
+                [ details [ class "application-controls" ]
+                    [ summary [] [ text "Application details" ]
+                    , detailCard "Application info"
                     Nothing
                     (div [ class "info-list" ]
                         [ infoRow iconUserTiny "Student" (display c.studentName)
@@ -490,10 +489,13 @@ caseDetailView model c =
                         , infoRow iconTasks "Gov reference" (display c.governmentRef)
                         ]
                     )
-                , detailCard "Workflow Progress"
-                    Nothing
-                    (workflowView caseStages c.currentStage)
-                , detailCard "Change stage"
+                    ]
+                , details [ class "application-controls" ]
+                    [ summary [] [ text "Workflow progress and stage controls" ]
+                    , detailCard "Workflow Progress"
+                        Nothing
+                        (workflowView caseStages c.currentStage)
+                    , detailCard "Change stage"
                     Nothing
                     (div [ class "stage-pills stage-pills--detail" ]
                         (List.map
@@ -514,6 +516,7 @@ caseDetailView model c =
                             caseStages
                         )
                     )
+                    ]
                 , detailCard "Notes"
                     Nothing
                     (if String.isEmpty c.notes then
@@ -524,7 +527,9 @@ caseDetailView model c =
                     )
                 ]
             , div [ class "detail__main" ]
-                [ detailCard "Documents"
+                [ details [ class "application-controls" ]
+                    [ summary [] [ text "All document records and uploads" ]
+                    , detailCard "Documents"
                     (Just
                         (button
                             [ class "detail-card__action"
@@ -535,12 +540,15 @@ caseDetailView model c =
                         )
                     )
                     (documentsPanel model c)
-
+                    ]
                 ]
             ]
-        , div [ class "bottom-row" ]
-            [ alertsPanel (caseAlerts model c)
-            , activityPanel (caseActivity model c)
+        , details [ class "application-controls" ]
+            [ summary [] [ text "Alerts and document activity" ]
+            , div [ class "bottom-row" ]
+                [ alertsPanel (caseAlerts model c)
+                , activityPanel (caseActivity model c)
+                ]
             ]
         ]
 
@@ -742,21 +750,29 @@ caseFormView model cf isEdit =
             , caseClientSelect model cf
             , caseRichField cf "serviceCategory" "Service category" "text"
             , caseRichField cf "destinationCountry" "Destination (e.g. CA)" "text"
-            , caseRichField cf "visaType" "Visa type" "text"
-            , caseRichField cf "schoolOrEmployer" "School or employer" "text"
             , div [] [ StaffPicker.view "cf-assignedOfficer" "cases" model.editingCaseId cf.assignedOfficer "Assigned officer" cf.submitting (UpdatedCaseFormField "assignedOfficer"), p [ class "ecc-field__message" ] [ text (Maybe.withDefault "" (caseFormFieldError "assignedOfficer" cf)) ], (if isEdit then p [] [ text "Transferring responsibility? ", a [ Attr.href ("/cases/" ++ Maybe.withDefault "" model.editingCaseId ++ "#handoff") ] [ text "Use Ownership and handoffs" ] ] else text "") ]
-            , caseRichField cf "externalAdviser" "External adviser" "text"
             , caseRichField cf "dateOpened" "Date opened" "date"
             , caseRichField cf "targetSubmission" "Target submission" "date"
-            , caseRichField cf "actualSubmission" "Actual submission" "date"
-            , caseRichField cf "governmentRef" "Government reference" "text"
             , caseRichField cf "nextAction" "Next action" "text"
             , caseRichField cf "nextDeadline" "Next deadline" "date"
-            , caseRichField cf "result" "Result" "text"
-            , caseRichField cf "closureDate" "Closure date" "date"
             ]
         , caseStagePills cf
         , casePriorityPills cf
+        , details
+            [ class "application-controls"
+            , Attr.property "open" (Json.Encode.bool (List.any (\( field, _ ) -> List.member field [ "visaType", "schoolOrEmployer", "externalAdviser", "actualSubmission", "governmentRef", "result", "closureDate" ]) cf.errors))
+            ]
+            [ summary [] [ text "Additional application details" ]
+            , div [ class "form-grid" ]
+                [ caseRichField cf "visaType" "Visa type" "text"
+                , caseRichField cf "schoolOrEmployer" "School or employer" "text"
+                , caseRichField cf "externalAdviser" "External adviser" "text"
+                , caseRichField cf "actualSubmission" "Actual submission" "date"
+                , caseRichField cf "governmentRef" "Government reference" "text"
+                , caseRichField cf "result" "Result" "text"
+                , caseRichField cf "closureDate" "Closure date" "date"
+                ]
+            ]
         , div [ class "ecc-field ecc-field--notes" ]
             [ span [ class "ecc-field__label" ] [ text "Notes" ]
             , textarea

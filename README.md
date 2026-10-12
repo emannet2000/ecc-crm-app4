@@ -26,7 +26,7 @@ students, agents, leads, cases, document tracking, invoices, payments, and partn
 
 ## Run
 
-Requires Elm 0.19.2, Go 1.26 or newer, and a C compiler (such as GCC) for the
+Requires Elm 0.19.1, Go 1.26 or newer, and a C compiler (such as GCC) for the
 [SQLite driver](https://github.com/mattn/go-sqlite3#installation).
 
 ```bash
@@ -99,6 +99,9 @@ passwords and tokens are never included in history entries.
 ## Verify
 
 ```bash
+npm install
+npm test
+npm run test:workspace-next
 elm make src/Main.elm --output=/tmp/ecc-crm-check.js
 cd golang-backend
 go test -race ./...
@@ -152,10 +155,15 @@ deadlines, and source/referrer pipeline reporting.
 
 ## Next priorities
 
-See [docs/ROADMAP.md](docs/ROADMAP.md) for the prioritized SQL migration,
-live integration acceptance tests, application handoffs, searchable record
-pickers, and adviser/finance usability sessions, including completion criteria
-and dependencies. These are planned work, not completed features.
+See [docs/ROADMAP.md](docs/ROADMAP.md) for implementation status and remaining acceptance work. SQL runtime isolation,
+application handoffs and searchable application/invoice pickers are implemented.
+Live integration acceptance and adviser/finance participation remain pending.
+
+Workspace tools are grouped into Daily work, Finance, Data and Administration
+with role and capability checks. Application essentials stay prominent; document
+filters and paged Files lists support follow-up. See
+[workflow validation](docs/WORKFLOW_VALIDATION.md) for local test evidence,
+isolated restoration and the remaining staff/provider acceptance work.
 
 See [real integration acceptance](docs/INTEGRATION_ACCEPTANCE.md) for the runnable
 provider checks and [staff usability](docs/STAFF_USABILITY.md) for participant
@@ -213,3 +221,5 @@ contact updates use searchable selection and review; QR tools and adviser Deals
 navigation are optional. Agents and partners share a directory while retaining
 their own record types and financial rules. See
 [consolidated workspace guide](docs/WORKSPACE_CONSOLIDATION.md).
+
+Mobile navigation, workspace team chat, and printable management reports are documented in [Mobile, chat and reports](docs/MOBILE_CHAT_REPORTS.md).

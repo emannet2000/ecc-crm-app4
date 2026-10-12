@@ -151,7 +151,12 @@
   }
   class AIProductivity extends HTMLElement {
     constructor() { super(); this.attachShadow({mode:'open'}); this.generation=0; }
-    connectedCallback() { this.render(); }
+    async connectedCallback() {
+      const container=this.closest('[data-ai-brief]');
+      if(!container){this.render();return;}
+      const generation=++this.generation;
+      try{const out=await request('/api/assistant/capabilities');if(!this.isConnected||generation!==this.generation)return;container.hidden=!(out.enabled&&out.proactive);if(out.enabled&&out.proactive)this.render();}catch{container.hidden=true;}
+    }
     disconnectedCallback() { this.generation++; }
     render() {
       this.shadowRoot.replaceChildren(); style(this.shadowRoot);
@@ -229,6 +234,10 @@
       for (const [value, text] of [['adviser','Advising'],['finance','Finance'],['management','Management']]) select.append(node('option', text, {value}));
       const apply = () => {
         if (sidebar) sidebar.dataset.focus = select.value;
+        if (sidebar) {
+          const primary = new Set([...sidebar.querySelectorAll('.nav-preset--'+select.value+' [data-nav-label], .sidebar__nav > [data-nav-label]')].map(item=>item.dataset.navLabel));
+          for (const item of sidebar.querySelectorAll('.navigation-more [data-nav-label]')) item.hidden = primary.has(item.dataset.navLabel);
+        }
         document.documentElement.dataset.navFocus = select.value;
         document.documentElement.dataset.showDeals = String(!!window.CRMConsolidation?.preferences().deals);
         window.dispatchEvent(new CustomEvent('ecc-navigation-focus', {detail:select.value}));
@@ -269,29 +278,37 @@
         card.onclick=()=>{category=key;categoryTitle=title;offset=0;this.load()};(['deals','pipeline','leads','students','cases'].includes(key)?totals:counts).append(card);cards.push({key,title,card,value});
       }
       this.load=async()=>{
-        const generation=++this.generation,requestedCategory=category,requestedOffset=offset;
+        const generation=++this.generation,requestedCategory=category,requestedOffset=offset,pageSize=window.matchMedia?.('(max-width: 640px)').matches?10:25;
         const focus=document.documentElement.dataset.navFocus||'adviser';
         refresh.disabled=true;result.inert=true;result.setAttribute('aria-busy','true');notice.textContent='Loading '+categoryTitle.toLowerCase()+'…';
         heading.textContent=categoryTitle;clear.hidden=!category;
         for(const {key,card} of cards){card.setAttribute('aria-pressed',String(category===key));card.hidden=false;}
         try{
-          const out=await request('/api/my-work?'+new URLSearchParams({scope:scope.value,focus,category:requestedCategory,offset:String(requestedOffset),limit:'25'}));
+          const out=await request('/api/my-work?'+new URLSearchParams({scope:scope.value,focus,category:requestedCategory,offset:String(requestedOffset),limit:String(pageSize)}));
           if(!this.isConnected||generation!==this.generation)return;
           if(requestedCategory&&out.category!==requestedCategory)throw new Error('The server did not apply this work filter. Restart the CRM server with the latest build, then use Refresh work.');
           summary.textContent=`${out.today} · ${out.total} work items · full accessible dataset`;
           for(const {key,title,card,value} of cards){value.textContent=String(out.counts?.[key]||0);card.setAttribute('aria-label',`${title}: ${value.textContent}. Show matching work`);}
-          result.replaceChildren();notice.textContent='';
-          if(!out.items?.length){result.append(node('p',category?'No matching work items in this view. Choose Show all work or change the assignment filter.':'No work items in this view. Choose All accessible work to check other assignments.'));return;}
+          result.replaceChildren();notice.textContent='';window.dispatchEvent(new Event('crm:my-work-ready'));
+          if(!out.items?.length){
+            result.append(node('p',category?'No matching work items in this view. Choose Show all work or change the assignment filter.':'No work items in this view. Choose All accessible work to check other assignments.'));
+            const actions=node('div',null,{class:'actions'});
+            const all=node('button','Check all accessible work',{type:'button',class:'secondary'});
+            all.onclick=()=>{scope.value='all';category='';categoryTitle='All work';offset=0;this.load()};actions.append(all);
+            for(const [label,href] of [['Create your first lead','/leads'],['Review applications','/cases'],['Review invoices & payments','/invoices']])actions.append(node('a',label,{href,class:'button secondary'}));
+            result.append(actions);return;
+          }
           for(const item of out.items){
             const card=node('article',null,{class:'card work-item work-item--'+item.priority});
             card.append(node('a',item.name,{href:item.route,class:'work-item__title'}),node('p','Needs attention: '+item.reason),node('p','Next action: '+(item.action||'Choose the next action.')),node('p','Responsible: '+(item.owner||'Unassigned')));
             card.append(node('p',item.deadline?'Due '+item.deadline:'Deadline: Not set'));
+            if(item.entity==='case'&&!item.owner)card.append(node('a','Assign an officer',{href:item.route+'#handoff',class:'button secondary'}));
             if(item.details?.length){const details=node('details',null,{class:'work-item__details'});details.append(node('summary','More context'));for(const detail of item.details)details.append(node('p',detail));card.append(details);}
             const actionLabel={case:'Review application and next action',lead:'Review lead and follow up',deal:'Review deal and next action',student:'Review student journey',task:'Review and update task',invoice:'Review balance and receipts',handoff:'Review handoff',document:'Review document requirement'}[item.entity]||'Review and take action';
             card.append(node('a',actionLabel,{href:item.route,class:'button secondary','aria-label':actionLabel+' — '+item.name}));result.append(card);
           }
           const pager=node('div',null,{class:'actions'});pager.append(node('span',`${requestedOffset+1}–${Math.min(requestedOffset+out.items.length,out.total)} of ${out.total}`));
-          for(const [text,next,enabled] of [['Previous',requestedOffset-25,requestedOffset>0],['Next',requestedOffset+25,requestedOffset+25<out.total]]){if(!enabled)continue;const button=node('button',text,{type:'button',class:'secondary'});button.onclick=()=>{offset=next;this.load()};pager.append(button)}result.append(pager);
+          for(const [text,next,enabled] of [['Previous',requestedOffset-pageSize,requestedOffset>0],['Next',requestedOffset+pageSize,requestedOffset+pageSize<out.total]]){if(!enabled)continue;const button=node('button',text,{type:'button',class:'secondary'});button.onclick=()=>{offset=next;this.load()};pager.append(button)}result.append(pager);
         }catch(error){if(generation===this.generation){result.replaceChildren();notice.textContent=error.message;}}
         finally{if(generation===this.generation){refresh.disabled=false;result.inert=false;result.setAttribute('aria-busy','false');}}
       };
@@ -382,9 +399,9 @@
   customElements.define('crm-integration-health',IntegrationHealth);
   class RecentChanges extends HTMLElement {
     constructor(){super();this.attachShadow({mode:'open'});this.generation=0;}
-    connectedCallback(){this.load();}
-    disconnectedCallback(){this.generation++;}
-    async load(){const generation=++this.generation;this.shadowRoot.replaceChildren();style(this.shadowRoot);const root=node('section',null,{class:'tools'}),result=node('div',null,{'aria-live':'polite'}),refresh=node('button','Refresh changes',{type:'button',class:'secondary'});refresh.onclick=()=>this.load();root.append(refresh,result);this.shadowRoot.append(root);try{const out=await request('/api/audit?limit=8&offset=0');if(!this.isConnected||generation!==this.generation)return;result.append(table('Recent workspace changes',out.events||[],[['label','Record'],['action','Change'],['actor','By'],['occurredAt','When']]),node('p',`${out.total||0} accessible changes in history`));}catch(error){if(generation===this.generation)result.textContent=error.message;}}
+    connectedCallback(){this.changed=()=>this.load();window.addEventListener('crm:record-changed',this.changed);if(window.CRMHomeSummary)window.CRMHomeSummary.schedule(this,()=>this.load());else this.load();}
+    disconnectedCallback(){this.summaryCleanup?.();window.removeEventListener('crm:record-changed',this.changed);this.generation++;}
+    async load(){window.CRMHomeSummary?.update(this,'Loading…');const generation=++this.generation;this.shadowRoot.replaceChildren();style(this.shadowRoot);const root=node('section',null,{class:'tools'}),result=node('div',null,{'aria-live':'polite'}),refresh=node('button','Refresh changes',{type:'button',class:'secondary'});refresh.onclick=()=>this.load();root.append(refresh,result);this.shadowRoot.append(root);try{const out=await request('/api/audit?limit=8&offset=0');if(!this.isConnected||generation!==this.generation)return;window.CRMHomeSummary?.update(this,`${out.total||0} accessible changes`);result.append(table('Recent workspace changes',out.events||[],[['label','Record'],['action','Change'],['actor','By'],['occurredAt','When']]),node('p',`${out.total||0} accessible changes in history`));}catch(error){if(generation===this.generation){result.textContent=error.message;window.CRMHomeSummary?.update(this,'Unavailable · open to retry')};}}
   }
   customElements.define('crm-recent-changes',RecentChanges);
   customElements.define('crm-workspace', Workspace);

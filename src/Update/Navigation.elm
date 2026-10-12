@@ -521,7 +521,7 @@ update msg model =
                 [ if route == Reports || route == Home then
                     case clearedModel.token of
                         Just token ->
-                            Cmd.batch [ Api.fetchReports token GotReports, if route == Reports then Api.fetchAudit token 0 (GotAudit 0) else Cmd.none ]
+                            Cmd.batch [ if route == Home then Api.fetchReports token GotReports else Cmd.none, if route == Reports then Api.fetchAudit token 0 (GotAudit 0) else Cmd.none ]
 
                         Nothing ->
                             Cmd.none

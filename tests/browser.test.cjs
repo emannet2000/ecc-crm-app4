@@ -233,7 +233,7 @@ test('report date filters request server aggregates and retain full record count
 });
 
 test('portal removes invitation credentials from the URL and supports document submission',async()=>{
- const {page,calls,errors}=await fixture('portal');try{await page.waitForSelector('input[type=file]');assert.equal(new URL(page.url()).hash,'');assert.equal(JSON.parse(calls.find(r=>r.path==='/api/portal/session').body).token,'single-use-invitation');assert.ok(await page.$eval('body',el=>el.textContent.includes('Journey progress')&&el.textContent.includes('0 of 1 required documents verified')&&el.textContent.includes('Next step: Upload passport')));const file=path.join(os.tmpdir(),'ecc-portal-upload.txt');fs.writeFileSync(file,'Client document');const input=await page.$('input[type=file]');await input.uploadFile(file);await page.evaluate(()=>document.querySelector('input[type=file]').closest('form').requestSubmit());await page.waitForFunction(()=>document.getElementById('notice').textContent.includes('uploaded'));assert.ok(calls.some(r=>r.path==='/api/portal/documents/doc_client/files'&&r.method==='POST'));assert.deepEqual(errors,[]);fs.unlinkSync(file)}finally{await page.close()}
+ const {page,calls,errors}=await fixture('portal');try{await page.waitForSelector('input[type=file]');assert.equal(new URL(page.url()).hash,'');assert.equal(JSON.parse(calls.find(r=>r.path==='/api/portal/session').body).token,'single-use-invitation');assert.ok(await page.$eval('body',el=>el.textContent.includes('Document review')&&el.textContent.includes('0 of 1 required documents verified')&&el.textContent.includes('Upload Passport')));const file=path.join(os.tmpdir(),'ecc-portal-upload.txt');fs.writeFileSync(file,'Client document');const input=await page.$('input[type=file]');await input.uploadFile(file);await page.evaluate(()=>document.querySelector('input[type=file]').closest('form').requestSubmit());await page.waitForFunction(()=>document.getElementById('notice').textContent.includes('uploaded'));assert.ok(calls.some(r=>r.path==='/api/portal/documents/doc_client/files'&&r.method==='POST'));assert.deepEqual(errors,[]);fs.unlinkSync(file)}finally{await page.close()}
 });
 
 test('data-quality scan filters findings and navigates to the affected case',async()=>{
@@ -305,7 +305,7 @@ test('live app login, native record workflows, reporting and mobile layout', {sk
   await page.waitForFunction(()=>[...document.querySelectorAll('button')].some(b=>b.textContent.trim()==='Add lead'));
   await page.evaluate(()=>[...document.querySelectorAll('button')].find(b=>b.textContent.trim()==='Add lead').click());
   await page.waitForSelector('#lf-referrer');
-  for(const [field,value]of Object.entries({name:'Flor CV Browser Client',email:'flor-cv-browser@example.com',referrer:'Flor',assignedTo:'Browser Adviser',followUpDate:'2026-10-20'}))await page.$eval('#lf-'+field,(e,value)=>{e.value=value;e.dispatchEvent(new Event('input',{bubbles:true}))},value);
+  for(const [field,value]of Object.entries({name:'Flor CV Browser Client',email:'flor-cv-browser@example.com',referrer:'Flor',assignedTo:'u_1',followUpDate:'2026-10-20'}))await page.$eval('#lf-'+field,(e,value)=>{e.value=value;e.dispatchEvent(new Event('input',{bubbles:true}))},value);
   await page.evaluate(()=>[...document.querySelectorAll('.modal button')].find(b=>b.textContent.trim()==='Referral').click());
   await page.click('.modal button[type=submit]');
   await page.waitForFunction(()=>!document.querySelector('.modal'));
@@ -325,8 +325,8 @@ test('live app login, native record workflows, reporting and mobile layout', {sk
   await page.waitForFunction(()=>document.querySelector('crm-record-tools')?.shadowRoot.textContent.includes('Versions'));
   await page.setViewport({width:390,height:844,isMobile:true,hasTouch:true});
   assert.ok(await page.$eval('body',e=>e.scrollWidth<=innerWidth+2),'lead CV panel overflows on phone');
-  await page.waitForFunction(()=>document.querySelector('crm-record-tools')?.shadowRoot.querySelector('[name=target]'));
-  await page.evaluate(()=>{const form=document.querySelector('crm-record-tools').shadowRoot.querySelector('[name=target]').closest('form');form.querySelector('[name=target]').value='student';form.querySelector('[name=confirmed]').checked=true;form.requestSubmit()});
+  await page.waitForFunction(()=>{const form=document.querySelector('crm-record-tools')?.shadowRoot.querySelector('[name=target]')?.closest('form');return form&&!form.querySelector('button[type=submit]').disabled});
+  await page.evaluate(()=>{const form=document.querySelector('crm-record-tools').shadowRoot.querySelector('[name=target]').closest('form');form.querySelector('[name=target]').value='student';form.querySelector('[name=confirmed]').checked=true;form.querySelector('button[type=submit]').click()});
   await page.waitForFunction(()=>document.querySelector('crm-record-tools')?.shadowRoot.textContent.includes('Open application'));
   const converted=await page.evaluate(async id=>(await(await fetch('/api/leads/'+id)).json()).lead,lead.id);
   assert.ok(converted.convertedContactId&&converted.convertedStudentId&&converted.convertedCaseId);
@@ -700,7 +700,7 @@ test('live application essentials group daily actions and reveal linked handoffs
    await page.waitForFunction(()=>document.querySelector('.application-essentials crm-work-plan')?.shadowRoot.querySelector('textarea'));
    assert.equal(await page.$eval('crm-record-tools',e=>e.shadowRoot.querySelectorAll('crm-work-plan').length),0);
    const essentials=await page.$eval('.application-essentials',e=>e.textContent);
-   assert.ok(essentials.includes('Owner, next action and due date'));
+   assert.ok(essentials.includes('Application essentials')&&essentials.includes('Stage:'));
    assert.equal(await page.$eval('#handoff',e=>e.open),false);
    assert.equal(await page.$eval('.application-controls:last-of-type',e=>e.open),false);
    await page.goto('http://localhost:'+port+'/cases/'+id+'#handoff',{waitUntil:'networkidle2'});

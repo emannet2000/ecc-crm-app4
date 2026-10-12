@@ -8,8 +8,9 @@ import (
 
 // Overview categories include records outside the due-work queue, while retaining
 // the same workspace, visibility and assignment boundaries.
-func dailyOverview(user User, s diskStore, filter string) map[string][]productivityItem {
+func dailyOverview(user User, s diskStore, filter, selected string) (map[string][]productivityItem, map[string]int) {
 	out := map[string][]productivityItem{"deals": {}, "pipeline": {}, "leads": {}, "students": {}, "cases": {}}
+	counts := map[string]int{"deals": 0, "pipeline": 0, "leads": 0, "students": 0, "cases": 0}
 	allowed := func(scope RecordScope, owner string) bool {
 		return scope.OrgID == user.OrgID && canRead(scope, user) && workAssigned(owner, scope, user, filter)
 	}
@@ -26,24 +27,37 @@ func dailyOverview(user User, s diskStore, filter string) map[string][]productiv
 		if !allowed(d.RecordScope, d.Owner) {
 			continue
 		}
+		counts["deals"]++
+		pipeline := !strings.EqualFold(d.Stage, "Won") && !strings.EqualFold(d.Stage, "Lost")
+		if pipeline {
+			counts["pipeline"]++
+		}
+		if selected != "deals" && (selected != "pipeline" || !pipeline) {
+			continue
+		}
 		currency := d.Currency
 		if currency == "" {
 			currency = "USD"
 		}
 		item := productivityItem{ID: d.ID, Entity: "deal", Name: d.Title, Reason: "Stage: " + d.Stage, Action: actionOrDefault(d.NextAction, "Review opportunity and linked activity"), Owner: d.Owner, Deadline: actionOrDefault(d.NextDeadline, d.CloseDate), Priority: "medium", Route: "/deals/" + d.ID, Details: details("Created", d.CreatedAt, "Value", fmt.Sprintf("%s %.2f", currency, d.Value), "Contact", d.ContactName)}
-		out["deals"] = append(out["deals"], item)
-		if !strings.EqualFold(d.Stage, "Won") && !strings.EqualFold(d.Stage, "Lost") {
-			out["pipeline"] = append(out["pipeline"], item)
-		}
+		out[selected] = append(out[selected], item)
 	}
 	for _, l := range s.Leads {
 		if !allowed(l.RecordScope, l.AssignedTo) {
+			continue
+		}
+		counts["leads"]++
+		if selected != "leads" {
 			continue
 		}
 		out["leads"] = append(out["leads"], productivityItem{ID: l.ID, Entity: "lead", Name: l.Name, Reason: "Status: " + l.Status, Action: leadNextAction(l.NextAction), Owner: l.AssignedTo, Deadline: l.FollowUpDate, Priority: "medium", Route: "/leads/" + l.ID, Details: details("Created", l.CreatedAt, "Email", l.Email, "Phone", l.Phone, "Source", l.Source, "Referrer", l.Referrer, "Interested service", l.InterestedService)})
 	}
 	for _, st := range s.Students {
 		if !allowed(st.RecordScope, st.OwnerID) {
+			continue
+		}
+		counts["students"]++
+		if selected != "students" {
 			continue
 		}
 		owner := st.OwnerID
@@ -54,6 +68,10 @@ func dailyOverview(user User, s diskStore, filter string) map[string][]productiv
 	}
 	for _, c := range s.Cases {
 		if !allowed(c.RecordScope, c.AssignedOfficer) {
+			continue
+		}
+		counts["cases"]++
+		if selected != "cases" {
 			continue
 		}
 		action := c.NextAction
@@ -70,5 +88,5 @@ func dailyOverview(user User, s diskStore, filter string) map[string][]productiv
 			return records[i].ID < records[j].ID
 		})
 	}
-	return out
+	return out, counts
 }

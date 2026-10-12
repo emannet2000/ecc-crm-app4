@@ -1,6 +1,6 @@
 'use strict';
 
-const CACHE_NAME = 'ecc-crm-shell-v6';
+const CACHE_NAME = 'ecc-crm-shell-v11';
 importScripts('/public/offline-worker.js');
 const APP_SHELL = [
   '/',
@@ -25,7 +25,7 @@ const APP_SHELL = [
   '/public/assignment-review.js',
   '/public/components.js',
   '/public/administration.js',
-  '/public/mobile.js',
+  '/public/reports.js', '/public/team-chat.js', '/public/mobile.js',
   '/public/offline.js',
   '/public/offline-worker.js',
   '/public/usability.js',

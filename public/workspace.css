@@ -311,9 +311,9 @@ form button[type=submit]:disabled::after{content:"";display:inline-block;width:1
 
 .app-shell .navigation-focus{display:grid;gap:8px;padding:10px 16px;font-size:12px;color:var(--text-muted)}.app-shell .navigation-focus select{width:100%;min-height:44px;padding:8px;font:inherit;background:var(--surface,#fff);color:var(--text);border:1px solid var(--border,#ddd);border-radius:8px}.app-shell .nav-preset{display:none}.app-shell .sidebar[data-focus=adviser] .nav-preset--adviser,.app-shell .sidebar[data-focus=finance] .nav-preset--finance,.app-shell .sidebar[data-focus=management] .nav-preset--management{display:block}.app-shell .navigation-more summary{cursor:pointer;min-height:44px;align-content:center;padding:8px 16px;font-weight:600;font-size:13px}.app-shell :is(summary,select,a,button):focus-visible{outline:3px solid var(--accent,#3266dd);outline-offset:3px}.app-shell .navigation-more{margin-top:8px}
 
-.app-shell .mobile-nav .nav-item[data-nav-label=Invoices],.app-shell .mobile-nav .nav-item[data-nav-label=Reports]{display:none}
-html[data-nav-focus=finance] .app-shell .mobile-nav .nav-item[data-nav-label=Invoices],html[data-nav-focus=finance] .app-shell .mobile-nav .nav-item[data-nav-label=Reports]{display:flex}
-html[data-nav-focus=finance] .app-shell .mobile-nav .nav-item[data-nav-label=Students],html[data-nav-focus=finance] .app-shell .mobile-nav .nav-item[data-nav-label=Applications]{display:none}
+.app-shell .mobile-nav .nav-item[data-nav-label=Invoices]{display:none}
+html[data-nav-focus=finance] .app-shell .mobile-nav .nav-item[data-nav-label=Invoices]{display:flex}
+html[data-nav-focus=finance] .app-shell .mobile-nav .nav-item[data-nav-label=Applications]{display:none}
 
 .receipt-choice{display:flex;gap:12px;align-items:flex-start;margin:14px 0;font-size:14px}.receipt-choice input{flex:none;min-width:24px;min-height:24px}.receipt-choice:focus-within{outline:2px solid var(--primary,#916113);outline-offset:4px}
 
@@ -326,3 +326,10 @@ html[data-nav-focus=finance] .app-shell .mobile-nav .nav-item[data-nav-label=Stu
 .navigation-more > summary { cursor: pointer; min-height: 44px; padding: 12px 14px; color: var(--text-muted); font-size: 13px; }
 .sidebar .optional-tools { color: var(--text-muted); }
 .sidebar .optional-tools summary { cursor: pointer; padding: 8px 0; }
+
+.app-shell .home-secondary { margin: 16px 0; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); }
+.app-shell .home-secondary > summary { cursor: pointer; min-height: 44px; padding: 14px 18px; color: var(--text); font-weight: 600; overflow-wrap: anywhere; }
+.app-shell .home-secondary[open] > summary { border-bottom: 1px solid var(--border); }
+.app-shell .home-secondary > :not(summary) { display: block; padding: 16px; }
+
+.report-secondary{margin-top:20px;border:1px solid var(--border,#dce3ec);border-radius:12px;padding:4px 16px}.report-secondary>summary{cursor:pointer;min-height:52px;align-content:center;font-weight:600;font-size:14px}.report-secondary[open]{padding-bottom:16px}.report-suite>.report-secondary .reports-panels{margin-top:12px}

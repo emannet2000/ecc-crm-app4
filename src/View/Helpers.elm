@@ -131,6 +131,8 @@ formField model cfg =
             , type_ inputType
             , placeholder " "
             , Attr.attribute "autocomplete" cfg.autocomplete
+            , Attr.attribute "autocapitalize" (if cfg.fieldKey == NameField then "words" else "none")
+            , Attr.attribute "enterkeyhint" (if isPassword then "go" else "next")
             , value val
             , onInput (UpdatedField cfg.fieldKey)
             ]

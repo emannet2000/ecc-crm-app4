@@ -21,6 +21,7 @@ type Route
     | Tasks
     | Reports
     | Workspace
+    | Chat
     | Administration
     | Settings
     | Schools

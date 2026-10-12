@@ -16,14 +16,15 @@ import (
 
 // These routes read committed SQL data without replacing the shared CRM cache.
 func independentRead(r *http.Request) bool {
-	if r.Method == "GET" && (r.URL.Path == "/api/work-outcomes" || r.URL.Path == "/api/communication" || r.URL.Path == "/api/workspace-calendar" || r.URL.Path == "/api/referral-directory") {
+	if r.Method == "GET" && (r.URL.Path == "/api/operations/attention" || r.URL.Path == "/api/workspace-priorities" || r.URL.Path == "/api/work-outcomes" || r.URL.Path == "/api/communication" || r.URL.Path == "/api/workspace-calendar" || r.URL.Path == "/api/referral-directory") {
 		return true
 	}
 	_, _, repository := repositoryRoute(r)
-	return repository || r.Method == "GET" && (r.URL.Path == "/api/reports" || r.URL.Path == "/api/audit" || r.URL.Path == "/api/search") || independentDailyRead(r) || independentAI(r) || r.Method == "GET" && (strings.HasPrefix(r.URL.Path, "/api/records/") || r.URL.Path == "/api/insights" || r.URL.Path == "/api/health")
+	return strings.HasPrefix(r.URL.Path, "/api/team-chat/") || repository || r.Method == "GET" && (r.URL.Path == "/api/reports" || r.URL.Path == "/api/audit" || r.URL.Path == "/api/search") || independentDailyRead(r) || independentAI(r) || r.Method == "GET" && (strings.HasPrefix(r.URL.Path, "/api/records/") || r.URL.Path == "/api/insights" || r.URL.Path == "/api/health")
 }
 func registerExpansionRoutes(m *http.ServeMux) {
 	registerDailyRoutes(m)
+	registerTeamChatRoutes(m)
 	m.HandleFunc("GET /api/escalation-rules", authMiddleware(handleEscalationRules))
 	m.HandleFunc("POST /api/escalation-rules", authMiddleware(handleEscalationRules))
 	m.HandleFunc("GET /api/application-gates", authMiddleware(handleGatePolicies))
@@ -45,6 +46,9 @@ func registerExpansionRoutes(m *http.ServeMux) {
 }
 func migrateExpansion(tx *sql.Tx) error {
 	statements := []string{
+		`CREATE TABLE IF NOT EXISTS team_messages(seq INTEGER PRIMARY KEY AUTOINCREMENT,org_id TEXT NOT NULL,sender_id TEXT NOT NULL,recipient_id TEXT NOT NULL,body TEXT NOT NULL,client_id TEXT NOT NULL,created_at TEXT NOT NULL,read_at TEXT NOT NULL DEFAULT '',UNIQUE(org_id,sender_id,recipient_id,client_id))`,
+		`CREATE INDEX IF NOT EXISTS team_messages_conversation ON team_messages(org_id,sender_id,recipient_id,seq)`,
+		`CREATE INDEX IF NOT EXISTS team_messages_unread ON team_messages(org_id,recipient_id,sender_id) WHERE read_at=''`,
 		`CREATE INDEX IF NOT EXISTS contacts_org_email ON contacts(json_extract(data,'$.orgId'),lower(json_extract(data,'$.email')))`,
 		`CREATE TABLE IF NOT EXISTS trash_batches(id TEXT PRIMARY KEY,org_id TEXT NOT NULL,actor TEXT NOT NULL,label TEXT NOT NULL,data TEXT NOT NULL,deleted_at TEXT NOT NULL,restored_at TEXT)`,
 		`CREATE TABLE IF NOT EXISTS application_gate_rules(org_id TEXT NOT NULL,stage TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(org_id,stage))`,

@@ -80,6 +80,7 @@ func queryObjects(r *http.Request, query string, args ...any) ([]map[string]any,
 func (state *runtimeStore) handleControlCenter(w http.ResponseWriter, r *http.Request) {
 	user := currentUser(r)
 	result := map[string]any{"user": user, "role": user.Role, "features": integrationStatusFor(r)}
+	result["financeCapabilities"] = map[string]bool{"recordPayments": financeCapability(r, "recordPayments"), "approveAdjustments": financeCapability(r, "approveAdjustments"), "reconcile": financeCapability(r, "reconcile"), "refunds": financeCapability(r, "refunds")}
 	queries := map[string]struct {
 		query string
 		args  []any
