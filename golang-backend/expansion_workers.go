@@ -65,6 +65,7 @@ func startExpansionWorkers(ctx context.Context) func() {
 			case <-ctx.Done():
 				return
 			case <-tick.C:
+				processTrashRetention(ctx)
 				expireAIVoice(ctx)
 				processAIAdvice(ctx)
 			}

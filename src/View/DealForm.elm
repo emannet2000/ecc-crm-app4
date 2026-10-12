@@ -8,6 +8,7 @@ import Html.Attributes as Attr exposing (class, disabled, for, id, placeholder, 
 import Html.Events exposing (onClick, onInput, onSubmit)
 import Json.Decode as D
 import Types exposing (..)
+import View.StaffPicker as StaffPicker
 import View.Deals exposing (dealStageOptions)
 import View.Helpers exposing (svgIcon, svgPath)
 
@@ -259,7 +260,8 @@ dealFormView model df isEdit =
                 "Save deal"
     in
     form [ onSubmit SubmittedDealForm, Attr.novalidate True ]
-        [ case formError of
+        [ Html.node "crm-draft-recovery" [] []
+        , case formError of
             Just msg ->
                 div [ class "ecc-alert ecc-alert--error" ] [ text msg ]
 
@@ -271,7 +273,7 @@ dealFormView model df isEdit =
             , dealRichField df "value" "Value" "number" False
             , dealCurrencySelect df
             , dealRichField df "closeDate" "Expected close" "date" False
-            , dealRichField df "owner" "Owner" "text" False
+            , div [] [ StaffPicker.view "df-owner" "deals" model.editingDealId df.owner "Owner" df.submitting (UpdatedDealFormField "owner"), p [ class "ecc-field__message" ] [ text (Maybe.withDefault "" (dealFormFieldError "owner" df)) ] ]
             ]
         , dealStagePills df
         , dealNotesField df
@@ -310,6 +312,7 @@ dealFormModal model df =
         [ div
             [ class "modal modal--wide"
             , Attr.attribute "role" "dialog"
+            , Attr.attribute "data-draft-record-id" (Maybe.withDefault "new" model.editingDealId)
             , Attr.attribute "aria-modal" "true"
             , Attr.attribute "aria-label" titleText
             , Html.Events.stopPropagationOn "click"

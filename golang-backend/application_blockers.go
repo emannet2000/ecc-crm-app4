@@ -67,6 +67,12 @@ func handleApplicationBlockers(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	today := organizationToday(r)
+	checklist, completed, err := documentChecklist(r, c, docs, today)
+	if err != nil {
+		writeError(w, 500, "Could not load requirement responsibility")
+		return
+	}
+
 	out := []ApplicationBlocker{}
 	for _, d := range docs {
 		if !d.Required || (!documentNeedsReview(d, today) && strings.EqualFold(d.Status, "Verified")) {
@@ -81,7 +87,7 @@ func handleApplicationBlockers(w http.ResponseWriter, r *http.Request) {
 			detail = "Expired on " + d.ExpiryDate
 			action = "Upload replacement"
 		}
-		out = append(out, ApplicationBlocker{"document", d.DocName, detail, action, "/cases/" + c.ID + "#record-tools?tab=documents&document=" + d.ID, c.AutoAdvance && !strings.EqualFold(d.Status, "Verified")})
+		out = append(out, ApplicationBlocker{"document", d.DocName, detail, action, "/cases/" + c.ID + "#record-tools?tab=documents&document=" + d.ID, c.AutoAdvance && documentNeedsReview(d, today)})
 	}
 	for _, inv := range invoices {
 		route := "/invoices/" + inv.ID
@@ -120,5 +126,31 @@ func handleApplicationBlockers(w http.ResponseWriter, r *http.Request) {
 			blocking++
 		}
 	}
-	writeJSON(w, 200, map[string]any{"items": out, "blockingCount": blocking, "autoAdvance": c.AutoAdvance, "scope": "Accessible application records"})
+	enriched := []map[string]any{}
+	for _, item := range out {
+		var row map[string]any
+		json.Unmarshal([]byte(mustJSON(item)), &row)
+		row["responsible"] = c.AssignedOfficer
+		row["deadline"] = c.NextDeadline
+		if item.Kind == "document" {
+			for _, requirement := range checklist {
+				if requirement.Route == item.Route {
+					row["responsible"] = requirement.Responsible
+					row["deadline"] = requirement.DueDate
+				}
+			}
+		}
+		if item.Kind == "payment" || item.Kind == "approval" || item.Kind == "refund" {
+			for _, inv := range invoices {
+				if item.Title == inv.InvoiceNumber {
+					row["deadline"] = inv.DueDate
+					if u, ok := committedUser(r, "id", inv.OwnerID); ok && u.OrgID == c.OrgID {
+						row["responsible"] = u.Name
+					}
+				}
+			}
+		}
+		enriched = append(enriched, row)
+	}
+	writeJSON(w, 200, map[string]any{"items": enriched, "checklist": checklist, "requiredCount": len(checklist), "completedCount": completed, "owner": c.AssignedOfficer, "nextAction": c.NextAction, "deadline": c.NextDeadline, "blockingCount": blocking, "autoAdvance": c.AutoAdvance, "scope": "Accessible application records"})
 }

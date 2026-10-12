@@ -266,6 +266,7 @@ taskFormModal model tf =
         [ div
             [ class "modal modal--wide"
             , Attr.attribute "role" "dialog"
+            , Attr.attribute "data-draft-record-id" (Maybe.withDefault "new" model.editingTaskId)
             , Html.Events.stopPropagationOn "click" (D.succeed ( DismissedToast, True ))
             ]
             [ header [ class "modal__header" ]
@@ -283,7 +284,8 @@ taskFormModal model tf =
 
               else
                 form [ onSubmit SubmittedTaskForm, Attr.novalidate True ]
-                    [ case taskFormFieldError "form" tf of
+                    [ Html.node "crm-draft-recovery" [] []
+                    , case taskFormFieldError "form" tf of
                         Just msg ->
                             div [ class "ecc-alert ecc-alert--error" ] [ text msg ]
 

@@ -47,13 +47,19 @@ func repositoryFields(entity string) map[string]reflect.Kind {
 	collect(reflect.TypeOf(types[entity]))
 	return out
 }
-func repositoryPredicate(r *http.Request, entity string) (string, []any) {
+
+// Apply record and parent visibility before filtering or limiting SQL results.
+func repositoryVisibility(r *http.Request, entity string) (string, []any) {
 	predicate, args := scopeSQL(r, "record.data")
 	// Related documents/payments/activity retain parent visibility checks in SQL.
 	parents := map[string]string{}
 	switch entity {
 	case "documents":
-		parents["cases"] = "caseId"
+		caseScope, caseArgs := scopeSQL(r, "parent.data")
+		leadScope, leadArgs := scopeSQL(r, "parent.data")
+		predicate += " AND ((COALESCE(json_extract(record.data,'$.caseId'),'')<>'' AND EXISTS(SELECT 1 FROM cases parent WHERE parent.id=json_extract(record.data,'$.caseId') AND " + caseScope + ")) OR (COALESCE(json_extract(record.data,'$.caseId'),'')='' AND EXISTS(SELECT 1 FROM leads parent WHERE parent.id=json_extract(record.data,'$.leadId') AND " + leadScope + ")))"
+		args = append(args, caseArgs...)
+		args = append(args, leadArgs...)
 	case "payments":
 		parents["invoices"] = "invoiceId"
 	case "activities":
@@ -70,8 +76,13 @@ func repositoryPredicate(r *http.Request, entity string) (string, []any) {
 		predicate += " AND " + exists
 		args = append(args, scopeArgs...)
 	}
+	return predicate, args
+}
+
+func repositoryPredicate(r *http.Request, entity string) (string, []any) {
+	predicate, args := repositoryVisibility(r, entity)
 	fields := repositoryFields(entity)
-	filters := map[string]string{"agentId": "agentId", "schoolId": "schoolId", "clientId": "clientId", "caseId": "caseId", "invoiceId": "invoiceId", "status": "status", "stage": "currentStage", "milestone": "paymentMilestone"}
+	filters := map[string]string{"agentId": "agentId", "schoolId": "schoolId", "clientId": "clientId", "leadId": "leadId", "caseId": "caseId", "invoiceId": "invoiceId", "status": "status", "stage": "currentStage", "milestone": "paymentMilestone"}
 	for query, field := range filters {
 		if value := strings.TrimSpace(r.URL.Query().Get(query)); value != "" {
 			if _, ok := fields[field]; ok {
@@ -104,8 +115,8 @@ func repositoryPredicate(r *http.Request, entity string) (string, []any) {
 	}
 	return predicate, args
 }
-func enrichRepositoryRecord(r *http.Request, entity string, record map[string]any) error {
-	if entity != "schools" && entity != "agents" {
+func enrichRepositoryRecords(r *http.Request, entity string, records []map[string]any) error {
+	if (entity != "schools" && entity != "agents") || len(records) == 0 {
 		return nil
 	}
 	field, countField := "schoolId", "studentsEnrolled"
@@ -113,12 +124,33 @@ func enrichRepositoryRecord(r *http.Request, entity string, record map[string]an
 		field, countField = "agentId", "studentsReferred"
 	}
 	scope, args := scopeSQL(r, "data")
-	args = append(args, fmtString(record["id"]))
-	var count int
-	if err := storeDB(r).QueryRow("SELECT count(*) FROM students WHERE "+scope+" AND json_extract(data,'$."+field+"')=?", args...).Scan(&count); err != nil {
+	placeholders := make([]string, len(records))
+	for i, record := range records {
+		placeholders[i] = "?"
+		args = append(args, fmtString(record["id"]))
+		record[countField] = 0
+	}
+	expression := "json_extract(data,'$." + field + "')"
+	rows, err := storeDB(r).Query("SELECT "+expression+",count(*) FROM students WHERE "+scope+" AND "+expression+" IN ("+strings.Join(placeholders, ",")+") GROUP BY "+expression, args...)
+	if err != nil {
 		return err
 	}
-	record[countField] = count
+	defer rows.Close()
+	counts := map[string]int{}
+	for rows.Next() {
+		var id string
+		var count int
+		if err := rows.Scan(&id, &count); err != nil {
+			return err
+		}
+		counts[id] = count
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+	for _, record := range records {
+		record[countField] = counts[fmtString(record["id"])]
+	}
 	return nil
 }
 func handleRepositoryRead(w http.ResponseWriter, r *http.Request, entity, id string) {
@@ -139,7 +171,7 @@ func handleRepositoryRead(w http.ResponseWriter, r *http.Request, entity, id str
 			writeError(w, 503, "Could not load record")
 			return
 		}
-		if err = enrichRepositoryRecord(r, entity, record); err != nil {
+		if err = enrichRepositoryRecords(r, entity, []map[string]any{record}); err != nil {
 			writeError(w, 500, "Could not load record totals")
 			return
 		}
@@ -148,6 +180,26 @@ func handleRepositoryRead(w http.ResponseWriter, r *http.Request, entity, id str
 		return
 	}
 	where, args := repositoryPredicate(r, entity)
+	var summary BoardSummary
+	var owners []string
+	var snapshot string
+	board := entity == "deals" && r.URL.Query().Get("board") == "page"
+	if board {
+		if !validBoardDates(w, r) {
+			return
+		}
+		where, args = dealBoardPredicate(r, where, args)
+		snapshot = boardSnapshot(r)
+		if expected := r.URL.Query().Get("snapshot"); expected != "" && expected != snapshot {
+			writeError(w, 409, "Deals changed. Refresh the board before loading more cards.")
+			return
+		}
+		summary, owners, err = boardTotals(r, where, args)
+		if err != nil {
+			writeError(w, 500, "Could not load board totals")
+			return
+		}
+	}
 	var total int
 	if err = storeDB(r).QueryRow("SELECT count(*) FROM "+entity+" record WHERE "+where, args...).Scan(&total); err != nil {
 		writeError(w, 500, "Could not load record totals")
@@ -167,8 +219,14 @@ func handleRepositoryRead(w http.ResponseWriter, r *http.Request, entity, id str
 		order = expression + direction + ",record.sort_order,record.id"
 	}
 	limit, offset := parseLimitOffset(r, 50, 0)
-	args = append(args, limit, offset)
-	rows, err := storeDB(r).Query("SELECT record.data FROM "+entity+" record WHERE "+where+" ORDER BY "+order+" LIMIT ? OFFSET ?", args...)
+	query := "SELECT record.data FROM " + entity + " record WHERE " + where + " ORDER BY " + order
+	if entity == "deals" && r.URL.Query().Get("board") == "all" {
+		limit, offset = total, 0
+	} else {
+		query += " LIMIT ? OFFSET ?"
+		args = append(args, limit, offset)
+	}
+	rows, err := storeDB(r).Query(query, args...)
 	if err != nil {
 		writeError(w, 500, "Could not load records")
 		return
@@ -193,19 +251,40 @@ func handleRepositoryRead(w http.ResponseWriter, r *http.Request, entity, id str
 		writeError(w, 500, "Could not load records")
 		return
 	}
-	for _, record := range records {
-		if err = enrichRepositoryRecord(r, entity, record); err != nil {
-			writeError(w, 500, "Could not load linked totals")
-			return
-		}
+	if err = enrichRepositoryRecords(r, entity, records); err != nil {
+		writeError(w, 500, "Could not load linked totals")
+		return
 	}
-	writeJSON(w, 200, map[string]any{entity: records, "total": total, "limit": limit, "offset": offset})
+	payload := map[string]any{entity: records, "total": total, "limit": limit, "offset": offset}
+	if board {
+		payload["summary"] = summary
+		payload["owners"] = owners
+		payload["snapshot"] = snapshot
+	}
+	writeJSON(w, 200, payload)
 }
 
 // Normal CRM mutations persist only changed rows with organization and previous
 // payload guards. Full synchronization remains available for bootstrap/import.
 func saveStoreDeltaTx(tx *sql.Tx, before, after diskStore, events []AuditEvent) error {
 	oldRecords, newRecords := recordsOf(before), recordsOf(after)
+	changedOrgs := map[string]bool{}
+	for id, raw := range oldRecords["deals"] {
+		if newRecords["deals"][id] != raw {
+			changedOrgs[recordOrg(raw)] = true
+		}
+	}
+	for id, raw := range newRecords["deals"] {
+		if oldRecords["deals"][id] != raw {
+			changedOrgs[recordOrg(raw)] = true
+		}
+	}
+	for org := range changedOrgs {
+		if _, err := tx.Exec("INSERT INTO app_meta(key,value) VALUES(?,'1') ON CONFLICT(key) DO UPDATE SET value=CAST(value AS INTEGER)+1", "deal-board:"+org); err != nil {
+			return err
+		}
+	}
+
 	changedCases := []Case{}
 	for _, entity := range entityTables {
 		for id, old := range oldRecords[entity] {

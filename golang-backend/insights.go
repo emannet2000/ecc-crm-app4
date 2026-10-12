@@ -283,7 +283,23 @@ func handleInsights(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	sort.Slice(next, func(i, j int) bool { return fmtString(next[i]["deadline"]) < fmtString(next[j]["deadline"]) })
-	writeJSON(w, 200, map[string]any{"sources": sources, "enrollment": enrollment, "agents": agents, "stages": duration, "nextActions": next, "from": from, "to": to, "cohort": "Lead and student creation dates; case creation dates for stage duration. Stage time is measured only from recorded transitions; current visits include elapsed time.", "totals": map[string]int{"contacts": len(s.Contacts), "deals": len(s.Deals), "students": len(s.Students), "cases": len(s.Cases)}})
+	lastStage := map[string]time.Time{}
+	for id, vs := range visits {
+		if len(vs) > 0 {
+			lastStage[id] = vs[len(vs)-1].at
+		}
+	}
+	people, err := requirementPeople(r)
+	if err != nil {
+		writeError(w, 500, "Could not load reporting staff")
+		return
+	}
+	names := map[string]string{}
+	for _, u := range people {
+		names[u.ID] = u.Name
+	}
+	operations := operationalReport(s, today, lastStage, names)
+	writeJSON(w, 200, map[string]any{"operations": operations, "sources": sources, "leadPipeline": leadPipelineMetrics(s.Leads, from, to, today), "leadPipelineMethod": "Creation-date cohorts; conversion is current lead status. First follow-up measures creation time to the first call/message explicitly logged as a client follow-up. Legacy records without precise creation timestamps are excluded from averages. No logged follow-up does not prove no contact occurred.", "enrollment": enrollment, "agents": agents, "stages": duration, "nextActions": next, "from": from, "to": to, "cohort": "Lead and student creation dates; case creation dates for stage duration. Stage time is measured only from recorded transitions; current visits include elapsed time.", "totals": map[string]int{"contacts": len(s.Contacts), "deals": len(s.Deals), "students": len(s.Students), "cases": len(s.Cases)}})
 }
 
 // Stage history is append-only. Compare with the latest recorded transition,

@@ -164,15 +164,29 @@ deletions send it using `If-Match`; an outdated version returns HTTP 409. Versio
 are frozen while an Elm edit modal is open, preventing a background refresh from
 silently authorizing stale values. Workflow forms submit their hydrated record
 version. Integrations should also pass `If-Match`; requests without it retain backward
-compatibility. Bulk actions currently retain their existing semantics and do not
-provide per-record version guards.
+compatibility. Contact and deal bulk changes require a `revisions` map keyed by every selected
+record ID. Missing revisions return 428; any stale revision returns 409 before
+any record changes. Deal bulk stage moves and deletions use one transaction.
+Contact bulk tools require a review preview before saving.
 
 Successful deletions archive a batch of deleted records and related changes inside
 the same transaction. Managers restore through **Trash**. Restoration is atomic:
 changed related records, missing parents, cross-workspace scopes and repeated restores
 are rejected. A failed persistence transaction does not create a successful archive.
-Archives remain in the private database and backup until a future retention/purge
-policy is implemented. Uploaded file versions remain privately stored for recovery.
+Workspace tools → Trash exposes a retention policy and permanent-deletion preview.
+The default eligibility age is 30 days; automatic purge is off. Administrators can
+set 1–3650 days, enable automatic purge, or preview and confirm a manual purge.
+Managers can inspect eligibility but cannot change the policy or purge records.
+The preview includes eligible archives, document-version counts/bytes and photos.
+Changes to reviewed archives, files or policy require a new preview.
+
+Purge removes eligible archive payloads, including old restored archives. Live
+records remain intact. Document versions and photos remain available while any
+live record or remaining archive requires them. Database deletion and a durable
+file-cleanup queue commit together; the worker removes unreferenced files after
+commit and retries failed cleanup. Automatic retention runs every 30 seconds.
+Security history records policy changes and archive purges. Existing backup
+archives keep their copies according to deployment backup retention.
 
 ## Deployment and recovery
 
@@ -325,3 +339,12 @@ advanced administration are available through their permission-scoped APIs. Real
 and requires its own model/configuration. Browser transcription/synthesis support
 and realtime voice are distinct capabilities. No live provider acceptance is
 implied by endpoint or mocked permission tests.
+
+## Application workflow controls
+
+Workspace managers configure document, review and approval requirements for chosen
+application stages, with reasoned and audited overrides. Client timelines include
+linked application, conversation, document and finance events within staff permissions.
+Escalation rules notify managers of overdue work or unanswered handoffs. The deal
+board now uses server filters and aggregates with 50-card progressive pages. See
+[Workflow controls](WORKFLOW_CONTROLS.md) for configuration and details.

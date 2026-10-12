@@ -65,7 +65,7 @@
   function refresh() {
     pending = false;
     prepareTables(document);
-    for (const host of document.querySelectorAll('crm-workspace,crm-record-tools,crm-insights,crm-administration,crm-student-journey,crm-my-work,crm-recent-changes')) {
+    for (const host of document.querySelectorAll('crm-workspace,crm-record-tools,crm-insights,crm-administration,crm-student-journey,crm-my-work,crm-recent-changes,crm-lead-work')) {
       const root = host.shadowRoot;
       if (!root) continue;
       if (!watched.has(root)) {
@@ -101,12 +101,12 @@
       this.update = () => {
         const offline = navigator.onLine === false;
         this.toggleAttribute('data-offline', offline);
-        const message = offline ? 'You’re offline. Reconnect before saving changes.' : '';
+        const message = offline ? (window.crmOffline?.status().enabled ? 'You’re offline. Opened records are available; supported edits will sync when connected. Review pending edits in Offline work.' : 'You’re offline. Reconnect before saving changes.') : '';
         if (this.textContent !== message) this.textContent = message;
       };
-      window.addEventListener('online', this.update); window.addEventListener('offline', this.update); this.update();
+      window.addEventListener('online', this.update); window.addEventListener('offline', this.update); window.addEventListener('crm:offline-status', this.update); this.update();
     }
-    disconnectedCallback() { window.removeEventListener('online', this.update); window.removeEventListener('offline', this.update); }
+    disconnectedCallback() { window.removeEventListener('online', this.update); window.removeEventListener('offline', this.update); window.removeEventListener('crm:offline-status', this.update); }
   }
   customElements.define('crm-connection-status', ConnectionStatus);
 

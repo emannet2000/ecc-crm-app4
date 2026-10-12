@@ -95,11 +95,8 @@ func handleOperations(w http.ResponseWriter, r *http.Request) {
 	if automationFailures > 0 {
 		alerts = append(alerts, "Follow-up automation has recorded "+strconv.FormatInt(automationFailures, 10)+" failure(s) since startup")
 	}
-	backupPath := filepath.Join(filepath.Dir(os.Getenv("DATABASE_PATH")), "backup-status.json")
+	backupPath := filepath.Join(filepath.Dir(dataPath), "backup-status.json")
 	backup := map[string]any{"state": "unknown", "message": "No backup status has been recorded"}
-	if os.Getenv("DATABASE_PATH") == "" {
-		backupPath = "/app/data/backup-status.json"
-	}
 	if b, err := os.ReadFile(backupPath); err == nil {
 		_ = json.Unmarshal(b, &backup)
 		if backup["state"] == "ok" {
@@ -112,6 +109,10 @@ func handleOperations(w http.ResponseWriter, r *http.Request) {
 		}
 		if backup["state"] == "failed" {
 			alerts = append(alerts, "Latest backup reports a failure")
+		}
+		verification, ok := backup["restoreVerification"].(map[string]any)
+		if !ok || verification["state"] != "verified" || verification["archive"] != backup["destination"] {
+			alerts = append(alerts, "Latest backup has no successful isolated restore verification")
 		}
 	} else {
 		alerts = append(alerts, "Backup status is unknown; run the backup command to establish monitoring")

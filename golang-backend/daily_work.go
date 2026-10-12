@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"sort"
 	"strings"
@@ -14,7 +15,14 @@ func independentDailyRead(r *http.Request) bool {
 	return (r.Method == "GET" && (p == "/api/usability/feedback" || p == "/api/my-work" || p == "/api/integrations/status" || strings.HasSuffix(p, "/blockers") && strings.HasPrefix(p, "/api/cases/") || strings.HasSuffix(p, "/finance-status") && strings.HasPrefix(p, "/api/invoices/") || strings.HasSuffix(p, "/journey") && strings.HasPrefix(p, "/api/students/"))) || (r.Method == "POST" && (p == "/api/usability/feedback" || p == "/api/form-quality" || strings.HasPrefix(p, "/api/admin/integrations/") && strings.HasSuffix(p, "/test")))
 }
 func registerDailyRoutes(m *http.ServeMux) {
+	registerProductivityRoutes(m)
 	registerHandoffRoutes(m)
+	registerLeadWorkRoutes(m)
+	m.HandleFunc("GET /api/assignments/review", authMiddleware(handleAssignmentReview))
+	m.HandleFunc("PATCH /api/assignments/{entity}/{id}", authMiddleware(dailyOrigin(handleAssignmentMapping)))
+	m.HandleFunc("GET /api/staff-directory", authMiddleware(handleStaffDirectory))
+	m.HandleFunc("GET /api/staff-options", authMiddleware(handleStaffOptions))
+	m.HandleFunc("POST /api/documents/{id}/review", authMiddleware(dailyOrigin(handleDocumentReview)))
 	m.HandleFunc("GET /api/cases/{id}/blockers", authMiddleware(handleApplicationBlockers))
 	m.HandleFunc("GET /api/invoices/{id}/finance-status", authMiddleware(handleInvoiceFinanceStatus))
 	m.HandleFunc("POST /api/payments/{id}/review", authMiddleware(handleReceiptReview))
@@ -49,6 +57,13 @@ func handleMyWork(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer close()
+	category := r.URL.Query().Get("category")
+	switch category {
+	case "", "deals", "pipeline", "leads", "students", "cases", "applications", "followups", "overdueLeads", "documents", "deadlines", "tasks", "handoffs", "overdueHandoffs", "pendingApprovals", "invoices", "documentIssues":
+	default:
+		writeError(w, 400, "Choose a valid work category")
+		return
+	}
 	filter := r.URL.Query().Get("scope")
 	if filter == "" {
 		filter = "mine"
@@ -62,7 +77,7 @@ func handleMyWork(w http.ResponseWriter, r *http.Request) {
 	pendingApprovals := map[string]int{}
 	approvalCount := 0
 	// Invoice amounts are kept per invoice/currency rather than adding unlike currencies.
-	if r.URL.Query().Get("focus") == "finance" {
+	{
 		var err error
 		pendingApprovals, err = pendingInvoiceReceiptCounts(r)
 		if err != nil {
@@ -85,9 +100,10 @@ func handleMyWork(w http.ResponseWriter, r *http.Request) {
 				}
 				approvalCount += pendingApprovals[inv.ID]
 			}
-			items = append(items, productivityItem{ID: inv.ID, Entity: "invoice", Name: inv.InvoiceNumber, Reason: reason, Action: "Review balance and recorded payments", Deadline: inv.DueDate, Priority: priority, Route: "/invoices/" + inv.ID, Rank: rank})
+			items = append(items, productivityItem{ID: inv.ID, Entity: "invoice", Name: inv.InvoiceNumber, Reason: reason, Action: "Review balance and recorded payments", Deadline: inv.DueDate, Priority: priority, Route: "/invoices/" + inv.ID, Owner: inv.OwnerID, Details: []string{currencyOf(inv.Currency) + " · Outstanding " + formatMoney(inv.Balance), fmt.Sprintf("%d receipt(s) awaiting approval", pendingApprovals[inv.ID])}, Rank: rank})
 		}
 	}
+	items = append(items, dailyDocumentItems(currentUser(r), s, today, filter)...)
 	sort.SliceStable(items, func(i, j int) bool {
 		if items[i].Rank != items[j].Rank {
 			return items[i].Rank < items[j].Rank
@@ -123,7 +139,7 @@ func handleMyWork(w http.ResponseWriter, r *http.Request) {
 			priority = "urgent"
 			overdueHandoffs++
 		}
-		items = append(items, productivityItem{ID: h.ID, Entity: "handoff", Name: c.CaseNumber, Reason: reason, Action: h.NextAction, Deadline: h.DueDate, Priority: priority, Route: "/cases/" + c.ID + "#handoff", Rank: 0})
+		items = append(items, productivityItem{ID: h.ID, Entity: "handoff", Name: c.CaseNumber, Reason: reason, Action: h.NextAction, Deadline: h.DueDate, Owner: h.FromName, Details: []string{"Receiving staff: " + h.ToName}, Priority: priority, Route: "/cases/" + c.ID + "#handoff", Rank: 0})
 		handoffCount++
 	}
 	if rows.Err() != nil {
@@ -134,8 +150,16 @@ func handleMyWork(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "Could not load pending handoffs")
 		return
 	}
-	sort.SliceStable(items, func(i, j int) bool { return items[i].Rank < items[j].Rank })
-	counts := map[string]int{"applications": 0, "followups": 0, "documents": 0, "deadlines": 0, "tasks": 0, "invoices": 0, "handoffs": handoffCount, "overdueHandoffs": overdueHandoffs, "pendingApprovals": approvalCount}
+	sort.SliceStable(items, func(i, j int) bool {
+		if items[i].Rank != items[j].Rank {
+			return items[i].Rank < items[j].Rank
+		}
+		if items[i].Deadline != items[j].Deadline {
+			return items[i].Deadline != "" && (items[j].Deadline == "" || items[i].Deadline < items[j].Deadline)
+		}
+		return items[i].Entity+items[i].ID < items[j].Entity+items[j].ID
+	})
+	counts := map[string]int{"applications": 0, "followups": 0, "documents": 0, "deadlines": 0, "tasks": 0, "invoices": 0, "handoffs": handoffCount, "overdueHandoffs": overdueHandoffs, "overdueLeads": 0, "pendingApprovals": approvalCount, "documentIssues": 0}
 	documentsByCase := map[string]bool{}
 	for _, doc := range s.Documents {
 		if documentNeedsReview(doc, today) {
@@ -151,8 +175,13 @@ func handleMyWork(w http.ResponseWriter, r *http.Request) {
 			}
 		case "lead":
 			counts["followups"]++
+			if days, valid := dateDistance(item.Deadline, today); valid && days < 0 {
+				counts["overdueLeads"]++
+			}
 		case "task":
 			counts["tasks"]++
+		case "document":
+			counts["documentIssues"]++
 		case "invoice":
 			counts["invoices"]++
 		}
@@ -161,7 +190,38 @@ func handleMyWork(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	limit, offset := parseLimitOffset(r, 25, 0)
-	writeJSON(w, 200, map[string]any{"items": slicePage(items, offset, limit), "total": len(items), "counts": counts, "today": today, "scope": filter, "limit": limit, "offset": offset})
+	overview := dailyOverview(currentUser(r), s, filter)
+	for key, records := range overview {
+		counts[key] = len(records)
+	}
+	filtered := []productivityItem{}
+	for _, item := range items {
+		days, dated := dateDistance(item.Deadline, today)
+		matches := category == "" || category == "documentIssues" && item.Entity == "document" ||
+			category == "applications" && item.Entity == "case" ||
+			category == "followups" && item.Entity == "lead" ||
+			category == "overdueLeads" && item.Entity == "lead" && dated && days < 0 ||
+			category == "documents" && item.Entity == "case" && documentsByCase[item.ID] ||
+			category == "deadlines" && dated && days <= 7 ||
+			category == "tasks" && item.Entity == "task" ||
+			category == "handoffs" && item.Entity == "handoff" ||
+			category == "overdueHandoffs" && item.Entity == "handoff" && dated && days < 0 ||
+			category == "pendingApprovals" && item.Entity == "invoice" && pendingApprovals[item.ID] > 0 ||
+			category == "invoices" && item.Entity == "invoice"
+		if matches {
+			filtered = append(filtered, item)
+		}
+	}
+	if records, exists := overview[category]; exists {
+		filtered = records
+	}
+	page := slicePage(filtered, offset, limit)
+	for i := range page {
+		if user, ok := committedUser(r, "id", page[i].Owner); ok && user.OrgID == currentUser(r).OrgID {
+			page[i].Owner = user.Name
+		}
+	}
+	writeJSON(w, 200, map[string]any{"items": page, "total": len(filtered), "counts": counts, "today": today, "scope": filter, "category": category, "limit": limit, "offset": offset})
 }
 func handleStudentJourney(w http.ResponseWriter, r *http.Request) {
 	r, s, close, ok := dailySnapshot(w, r)
@@ -281,17 +341,16 @@ func formQuality(s diskStore, in formQualityRequest, today string) []qualityFind
 			add("Choose a school", "Link this program to a school so the application can be tracked.", "students", "")
 		}
 	case "leads":
-		if in.Status != "Converted" && in.Status != "Closed" && in.FollowUpDate == "" {
+		if openLead(in.Status) && in.FollowUpDate == "" {
 			add("Set a follow-up date", "Choose when to contact this lead next.", "leads", "")
 		}
-		for _, l := range s.Leads {
-			if l.ID == in.ID {
-				continue
-			}
-			if qualityKey(in.Email) != "" && qualityKey(l.Email) == qualityKey(in.Email) || normalizePhone(in.Phone) != "" && normalizePhone(l.Phone) == normalizePhone(in.Phone) {
-				add("Possible duplicate lead", "Review "+l.Name+" with matching contact details.", "leads", l.ID)
-			}
+		if openLead(in.Status) && strings.TrimSpace(in.NextAction) == "" {
+			add("Set the next action", "Describe the next staff action for this inquiry.", "leads", "")
 		}
+		for _, candidate := range leadDuplicateCandidates(s, in.ID, in.Email, in.Phone) {
+			add("Possible duplicate "+candidate.EntityLabel, candidate.Detail, candidate.Entity, candidate.ID)
+		}
+
 	case "cases":
 		if in.CurrentStage != "Approved" && in.CurrentStage != "Closed" {
 			if strings.TrimSpace(in.NextAction) == "" {

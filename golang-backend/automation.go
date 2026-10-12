@@ -64,7 +64,16 @@ func generateReminders() {
 		}
 		return time.Now().In(zone).AddDate(0, 0, offset).Format("2006-01-02")
 	}
+	if err = remindLeadFollowUps(tx, s, orgDay); err != nil {
+		return
+	}
+	if err = runEscalations(tx, s, orgDay); err != nil {
+		return
+	}
 	if err = remindPendingHandoffs(tx, s, orgDay); err != nil {
+		return
+	}
+	if err = remindProductivity(tx, s, orgDay); err != nil {
 		return
 	}
 	today := time.Now().Format("2006-01-02")
@@ -107,12 +116,15 @@ func generateReminders() {
 			changed = true
 		}
 		if d.ExpiryDate != "" && d.ExpiryDate <= orgDay(d.OrgID, 30) {
-			notificationWithDB(tx, d.OrgID, d.OwnerID, "document", "Document expiry", d.DocName+" expires "+d.ExpiryDate, "/cases/"+d.CaseID, "expiry:"+d.ID+":"+d.ExpiryDate)
+			recipient, route, active := documentResponsible(s, d)
+			if active {
+				notificationWithDB(tx, d.OrgID, recipient, "document", "Document expiry", d.DocName+" expires "+d.ExpiryDate, route, "expiry:"+d.ID+":"+d.ExpiryDate)
+			}
 		}
 	}
 	for _, c := range s.Cases {
 		if c.NextDeadline != "" && c.NextDeadline <= orgDay(c.OrgID, 3) && c.CurrentStage != "Closed" && c.CurrentStage != "Approved" {
-			notificationWithDB(tx, c.OrgID, c.OwnerID, "case", "Case deadline", c.CaseNumber+": "+c.NextDeadline, "/cases/"+c.ID, "deadline:"+c.ID+":"+c.NextDeadline)
+			notificationWithDB(tx, c.OrgID, responsibleRecipient(s, c.RecordScope, c.AssignedOfficer), "case", "Case deadline", c.CaseNumber+": "+c.NextAction+" · "+c.NextDeadline, "/cases/"+c.ID, "deadline:"+c.ID+":"+c.NextDeadline)
 		}
 	}
 	for _, inv := range s.Invoices {
@@ -135,6 +147,11 @@ func generateReminders() {
 	if changed {
 		state.restoreStore(s)
 		state.applyComputedData()
+		final := state.snapshot()
+		if err = enforceApplicationGates(r, original, &final); err != nil {
+			return
+		}
+		state.restoreStore(final)
 		events := changesBetween(original, state.snapshot(), "System")
 		if err = saveStoreDeltaTx(tx, original, state.snapshot(), events); err != nil {
 			return

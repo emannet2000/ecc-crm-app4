@@ -142,6 +142,14 @@ feature set; it is not a production acceptance record for this expansion.
 
 See [docs/DAILY_WORK.md](docs/DAILY_WORK.md) for My work today, the unified student journey, navigation presets, inline form warnings, integration connection checks, SQL repository changes and verification.
 
+See [lead intake from a CV](docs/LEAD_INTAKE.md) for direct Leads navigation,
+referrer details, CV attachments before an application exists, reviewed AI fields,
+and conversion into a client or student/application with document history.
+
+See [lead work and requirements](docs/LEAD_WORK.md) for next actions, overdue lead
+reminders, duplicate review, lead activity history, document responsibility and
+deadlines, and source/referrer pipeline reporting.
+
 ## Next priorities
 
 See [docs/ROADMAP.md](docs/ROADMAP.md) for the prioritized SQL migration,
@@ -157,3 +165,51 @@ sessions remain pending.
 See [operational improvements](docs/OPERATIONAL_IMPROVEMENTS.md) for faster
 contact saves, application requirements, handoff reminders, duplicate receipt
 checks and optional manager approval.
+
+Record cleanup and historical assignment review: [workflow guide](docs/RECORD_CLEANUP.md).
+
+
+## Offline work, full deal boards and record retention
+
+Enable **Offline work** to cache opened CRM views on this device and queue edits
+with conflict review on synchronization. See [mobile/offline use](docs/MOBILE.md).
+Deal board filters and metrics now cover every accessible matching deal. Bulk
+contact updates and deal changes require every selected record's revision and
+commit atomically. Administrators manage trash eligibility, purge previews and
+optional automatic cleanup in **Workspace tools → Trash**. See
+[record conflicts and trash](docs/EXPANSION.md#record-conflicts-and-trash).
+
+## Application workflow controls
+
+Application stage gates, a unified client timeline, configurable manager escalations
+and a progressively loaded deal board are available. Managers configure policies
+and escalation rules in Workspace tools. See [Workflow controls](docs/WORKFLOW_CONTROLS.md)
+for setup, permission behavior and verification.
+
+## Usability and performance cycle
+
+The daily work and application screens group actionable work and essential
+fields, with expandable controls and draft recovery. **Workspace tools → Staff
+usability** includes a two-session guide and a manager review of the three tasks
+with the most recorded completion problems. Use the
+[session worksheet](docs/STAFF_SESSION_WORKSHEET.md) to identify exact obstacles,
+choose up to three fixes and retest them with staff. Actual participation and
+findings remain pending.
+
+Run `npm run test:performance` for an isolated workload with 5,000 contacts,
+applications and documents. [Performance measurements](docs/PERFORMANCE.md)
+records the current backend baseline, its limits and JavaScript component
+ownership. Global search now uses SQL visibility checks and measures about 20
+times faster in a fresh local comparison. Dashboard and daily-work aggregation
+are the next profiling candidates. Browser loading and deployment-specific workloads need separate
+measurement before choosing performance targets.
+
+See [focused staff workflows](docs/WORKFLOW_FOCUS.md) for manager exception queues,
+service templates, combined communication history, operational attention and the
+simplified daily-work/application screens.
+
+Communication controls and calendars now share consolidated workspaces. Bulk
+contact updates use searchable selection and review; QR tools and adviser Deals
+navigation are optional. Agents and partners share a directory while retaining
+their own record types and financial rules. See
+[consolidated workspace guide](docs/WORKSPACE_CONSOLIDATION.md).

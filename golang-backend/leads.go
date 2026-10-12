@@ -8,19 +8,22 @@ import (
 )
 
 type leadRequest struct {
-	LeadNumber        string `json:"leadNumber"`
-	Name              string `json:"name"`
-	Email             string `json:"email"`
-	Phone             string `json:"phone"`
-	Nationality       string `json:"nationality"`
-	CurrentCountry    string `json:"currentCountry"`
-	InterestedCountry string `json:"interestedCountry"`
-	InterestedService string `json:"interestedService"`
-	Source            string `json:"source"`
-	AssignedTo        string `json:"assignedTo"`
-	Status            string `json:"status"`
-	FollowUpDate      string `json:"followUpDate"`
-	Notes             string `json:"notes"`
+	NextAction         string `json:"nextAction"`
+	DuplicateConfirmed bool   `json:"duplicateConfirmed"`
+	Referrer           string `json:"referrer"`
+	LeadNumber         string `json:"leadNumber"`
+	Name               string `json:"name"`
+	Email              string `json:"email"`
+	Phone              string `json:"phone"`
+	Nationality        string `json:"nationality"`
+	CurrentCountry     string `json:"currentCountry"`
+	InterestedCountry  string `json:"interestedCountry"`
+	InterestedService  string `json:"interestedService"`
+	Source             string `json:"source"`
+	AssignedTo         string `json:"assignedTo"`
+	Status             string `json:"status"`
+	FollowUpDate       string `json:"followUpDate"`
+	Notes              string `json:"notes"`
 }
 
 var validLeadSources = []string{
@@ -76,6 +79,14 @@ func validateLead(req leadRequest) map[string]string {
 		fields["status"] = "Invalid status"
 	}
 
+	if len(req.NextAction) > 1000 {
+		fields["nextAction"] = "Next action must be 1,000 characters or fewer"
+	}
+	if req.FollowUpDate != "" {
+		if _, err := time.Parse("2006-01-02", req.FollowUpDate); err != nil {
+			fields["followUpDate"] = "Choose a valid follow-up date"
+		}
+	}
 	return fields
 }
 
@@ -133,11 +144,24 @@ func (state *runtimeStore) createLeadHandler(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
+	req.Status = strings.TrimSpace(req.Status)
 	if fields := validateLead(req); len(fields) > 0 {
 		writeFieldErrors(w, fields)
 		return
 	}
 
+	if req.Status == "Converted" {
+		writeFieldErrors(w, map[string]string{"status": "Use CV & conversion to create the linked client record."})
+		return
+	}
+	var valid bool
+	req.AssignedTo, valid = normalizeStaffAssignment(w, r, req.AssignedTo, "", "assignedTo", newRecordScope(r))
+	if !valid {
+		return
+	}
+	if !state.checkLeadDuplicates(w, r, "", req) {
+		return
+	}
 	email, _ := r.Context().Value(ctxUserEmail).(string)
 	createdBy := "Unknown"
 	if email != "" {
@@ -151,6 +175,9 @@ func (state *runtimeStore) createLeadHandler(w http.ResponseWriter, r *http.Requ
 		RecordScope:       newRecordScope(r),
 		ID:                newID("l"),
 		LeadNumber:        strings.TrimSpace(req.LeadNumber),
+		NextAction:        leadNextAction(req.NextAction),
+		CreatedAtTime:     utcNow(),
+		Referrer:          strings.TrimSpace(req.Referrer),
 		Name:              strings.TrimSpace(req.Name),
 		Email:             strings.TrimSpace(req.Email),
 		Phone:             strings.TrimSpace(req.Phone),
@@ -188,6 +215,7 @@ func (state *runtimeStore) updateLeadHandler(w http.ResponseWriter, r *http.Requ
 		writeError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
+	req.Status = strings.TrimSpace(req.Status)
 	if fields := validateLead(req); len(fields) > 0 {
 		writeFieldErrors(w, fields)
 		return
@@ -208,8 +236,25 @@ func (state *runtimeStore) updateLeadHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	old := state.leads[idx]
+	if req.Status != old.Status && (req.Status == "Converted" || old.ConvertedContactID != "" || old.ConvertedCaseID != "" || old.ConvertedStudentID != "") {
+		writeFieldErrors(w, map[string]string{"status": "Use the conversion action when the client proceeds. Linked converted leads cannot be reopened by changing status."})
+		return
+	}
+	var valid bool
+	req.AssignedTo, valid = normalizeStaffAssignment(w, r, req.AssignedTo, old.AssignedTo, "assignedTo", old.RecordScope)
+	if !valid {
+		return
+	}
+	if qualityKey(old.Email) != qualityKey(req.Email) || phoneIdentity(old.Phone) != phoneIdentity(req.Phone) {
+		if !state.checkLeadDuplicates(w, r, id, req) {
+			return
+		}
+	}
 	updated := state.leads[idx]
 	updated.LeadNumber = strings.TrimSpace(req.LeadNumber)
+	updated.Referrer = strings.TrimSpace(req.Referrer)
+	updated.NextAction = leadNextAction(req.NextAction)
 	updated.Name = strings.TrimSpace(req.Name)
 	updated.Email = strings.TrimSpace(req.Email)
 	updated.Phone = strings.TrimSpace(req.Phone)
@@ -252,6 +297,13 @@ func (state *runtimeStore) deleteLeadHandler(w http.ResponseWriter, r *http.Requ
 	}
 
 	state.leads = append(state.leads[:idx], state.leads[idx+1:]...)
+	keptDocs := state.documents[:0]
+	for _, doc := range state.documents {
+		if doc.LeadID != id {
+			keptDocs = append(keptDocs, doc)
+		}
+	}
+	state.documents = keptDocs
 	writeJSON(w, http.StatusOK, map[string]any{"deleted": id})
 }
 

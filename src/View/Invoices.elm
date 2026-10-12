@@ -149,7 +149,7 @@ invoicesView model =
                             [ thead []
                                 [ tr []
                                     [ th [] [ text "Invoice" ]
-                                    , th [] [ text "Case" ]
+                                    , th [] [ text "Application" ]
                                     , th [] [ text "Balance" ]
                                     , th [] [ text "Milestone" ]
                                     , th [ class "th-actions" ] [ text "" ]
@@ -299,7 +299,7 @@ invoiceDetailView model inv =
                     Nothing
                     (div [ class "info-list" ]
                         [ infoRow iconUserTiny "Client" inv.clientName
-                        , infoRow iconTasks "Case" (display inv.caseNumber)
+                        , infoRow iconTasks "Application" (display inv.caseNumber)
                         , infoRow iconDeals "School partner fee" (formatCurrencyWith inv.currency inv.schoolPartnerFee)
                         , infoRow iconDeals "Referral commission" (formatCurrencyWith inv.currency inv.referralCommission)
                         , infoRow iconDeals "Partner payable" (formatCurrencyWith inv.currency inv.partnerPayable)
@@ -505,7 +505,8 @@ invoiceFormView model inv isEdit =
                 "Save invoice"
     in
     form [ onSubmit SubmittedInvoiceForm, Attr.novalidate True ]
-        [ case formError of
+        [ Html.node "crm-draft-recovery" [] []
+        , case formError of
             Just msg ->
                 div [ class "ecc-alert ecc-alert--error" ] [ text msg ]
 
@@ -574,6 +575,7 @@ invoiceFormModal model inv =
         [ div
             [ class "modal modal--wide"
             , Attr.attribute "role" "dialog"
+            , Attr.attribute "data-draft-record-id" (Maybe.withDefault "new" model.editingInvoiceId)
             , Attr.attribute "aria-modal" "true"
             , Attr.attribute "aria-label" titleText
             , Html.Events.stopPropagationOn "click"
@@ -664,8 +666,8 @@ deleteInvoiceConfirmModal inv =
         ]
 
 
-paymentFormModal : PaymentForm -> Html Msg
-paymentFormModal pf =
+paymentFormModal : Model -> PaymentForm -> Html Msg
+paymentFormModal model pf =
     let
         fieldErr field =
             pf.errors
@@ -677,6 +679,7 @@ paymentFormModal pf =
         [ div
             [ class "modal modal--narrow"
             , Attr.attribute "role" "dialog"
+            , Attr.attribute "data-draft-record-id" (Maybe.map .id model.viewingInvoice |> Maybe.withDefault "new")
             , Attr.attribute "aria-modal" "true"
             , Attr.attribute "aria-label" "Record payment"
             , Html.Events.stopPropagationOn "click"
@@ -685,7 +688,8 @@ paymentFormModal pf =
             [ header [ class "modal__header" ]
                 [ h2 [ class "modal__title" ] [ text "Record payment" ] ]
             , form [ onSubmit SubmittedPaymentForm, Attr.novalidate True ]
-                [ case fieldErr "form" of
+                [ Html.node "crm-draft-recovery" [] []
+                , case fieldErr "form" of
                     Just msg ->
                         div [ class "ecc-alert ecc-alert--error" ] [ text msg ]
 

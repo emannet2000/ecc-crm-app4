@@ -14,7 +14,7 @@ pageSize =
 
 dealsBoardLimit : Int
 dealsBoardLimit =
-    200
+    50
 
 
 contactsQueryOf : Model -> String
@@ -64,7 +64,7 @@ loadDeals model =
     case model.token of
         Just t ->
             ( { model | deals = Loading }
-            , Api.fetchDeals t (dealsQueryOf model) dealsBoardLimit 0 GotDeals
+            , Api.fetchDeals t (dealsQueryOf model) model.ownerFilter model.dateFromFilter model.dateToFilter "" dealsBoardLimit 0 (GotDealsAt model.dealsRequestId (dealsQueryOf model) False)
             )
 
         Nothing ->

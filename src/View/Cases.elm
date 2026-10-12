@@ -9,6 +9,7 @@ import Html.Events exposing (onClick, onInput, onSubmit)
 import Json.Decode as D
 import View.RecordPicker as RecordPicker
 import Types exposing (..)
+import View.StaffPicker as StaffPicker
 import View.Dashboard exposing (ActivityEntry, PriorityAlert, activityPanel, alertsPanel, documentCorrectionAlert, documentEntry, expiredDocumentAlert, urgentCaseAlert)
 import View.Helpers exposing (detailCard, detailEmpty, detailStat, infoRow, initials, onCheck, paginationBar, svgIcon, svgPath)
 import View.Icons exposing (iconBack, iconCalendar, iconContacts, iconDeals, iconEdit, iconPin, iconTasks, iconTrash, iconUserTiny)
@@ -140,7 +141,7 @@ casesSkeleton =
     div []
         [ div [ class "page-toolbar" ]
             [ div [ class "page-toolbar__search" ]
-                [ input [ type_ "text", placeholder "Search cases…", disabled True ] [] ]
+                [ input [ type_ "text", placeholder "Search applications…", disabled True ] [] ]
             ]
         , div [ class "table-wrap" ]
             (List.repeat 5
@@ -164,7 +165,7 @@ casesView model =
 
         Failure msg ->
             div [ class "content__empty-block" ]
-                [ text ("Could not load cases: " ++ msg), button [ class "ecc-btn ecc-btn--ghost ecc-btn--inline", onClick (NavigatedTo model.route) ] [ text "Retry" ] ]
+                [ text ("Could not load applications: " ++ msg), button [ class "ecc-btn ecc-btn--ghost ecc-btn--inline", onClick (NavigatedTo model.route) ] [ text "Retry" ] ]
 
         Success data ->
             let
@@ -176,8 +177,8 @@ casesView model =
                     [ div [ class "page-toolbar__search" ]
                         [ input
                             [ type_ "search"
-                            , Attr.attribute "aria-label" "Search cases"
-                            , placeholder "Search cases…"
+                            , Attr.attribute "aria-label" "Search applications"
+                            , placeholder "Search applications…"
                             , value data.query
                             , onInput UpdatedCasesQuery
                             ]
@@ -188,7 +189,7 @@ casesView model =
                         , type_ "button"
                         , onClick OpenedAddCase
                         ]
-                        [ text "Add case" ]
+                        [ text "Add application" ]
                     ]
                 , div [ class "stage-pills", Attr.style "margin-bottom" "12px" ]
                     (button
@@ -225,16 +226,16 @@ casesView model =
                         [ h3 [ class "empty-state__title" ]
                             [ text
                                 (if isQueryEmpty && String.isEmpty data.stageFilter then
-                                    "No cases yet"
+                                    "No applications yet"
 
                                  else
-                                    "No cases match"
+                                    "No applications match"
                                 )
                             ]
                         , p [ class "empty-state__desc" ]
                             [ text
                                 (if isQueryEmpty && String.isEmpty data.stageFilter then
-                                    "Add your first case to track submissions and visa progress."
+                                    "Add your first application to track submissions and visa progress."
 
                                  else
                                     "Try a different search or clear the stage filter."
@@ -347,7 +348,7 @@ documentsPanel model _ =
             detailEmpty
                 iconTasks
                 "No documents yet"
-                "Add the first document for this case to start tracking requirements."
+                "Add the first document for this application to start tracking requirements."
 
         Success docs ->
             div [ class "activity-list" ]
@@ -413,9 +414,8 @@ caseDetailView model c =
             , onClick (NavigatedTo Cases)
             ]
             [ iconBack
-            , span [] [ text "Back to cases" ]
+            , span [] [ text "Back to applications" ]
             ]
-        , a [ Attr.href "#record-tools?tab=workflows", Attr.target "_self", class "ecc-btn ecc-btn--ghost ecc-btn--inline" ] [ text "Checklist, SLA & linked cases" ]
         , header [ class "detail-hero" ]
             [ div [ class "detail-hero__avatar" ] [ text (initials c.studentName) ]
             , div [ class "detail-hero__body" ]
@@ -446,17 +446,35 @@ caseDetailView model c =
                     ]
                 ]
             ]
-        , node "crm-application-blockers" [ Attr.attribute "record-id" c.id ] []
-        , node "crm-case-handoff" [ Attr.attribute "record-id" c.id, id "handoff" ] []
+        , section [ class "application-essentials", Attr.attribute "aria-label" "Application essentials" ]
+            [ h2 [ class "detail-card__title" ] [ text "Owner, next action and due date" ]
+            , node "crm-work-plan" [ Attr.attribute "entity" "cases", Attr.attribute "record-id" c.id, id "next-action" ] []
+            , button [ class "ecc-btn ecc-btn--ghost ecc-btn--inline", type_ "button", onClick (OpenedEditCase c) ] [ text "Change owner or application details" ]
+            , nav [ class "links", Attr.attribute "aria-label" "Application journey" ]
+                [ if String.isEmpty c.clientId then text "" else a [ Attr.href ("/contacts/" ++ c.clientId ++ "#record-tools?tab=history") ] [ text "Payments and client history" ]
+                , if String.isEmpty c.studentId then text "" else a [ Attr.href ("/students/" ++ c.studentId) ] [ text "Student journey" ]
+                , a [ Attr.href "#record-tools?tab=conversations" ] [ text "Communication history" ]
+                , a [ Attr.href "#record-tools?tab=documents" ] [ text "Review documents" ]
+                ]
+            , node "crm-application-blockers" [ Attr.attribute "record-id" c.id ] []
+            ]
+        , details [ class "application-controls", id "handoff" ]
+            [ summary [] [ text "Ownership and handoffs" ]
+            , node "crm-case-handoff" [ Attr.attribute "record-id" c.id ] []
+            ]
+        , details [ class "application-controls" ]
+            [ summary [] [ text "Advanced application tools" ]
+            , p [] [ text "Review checklists, service deadlines and linked applications." ]
+            , a [ Attr.href "#record-tools?tab=workflows", class "ecc-btn ecc-btn--ghost ecc-btn--inline" ] [ text "Open application tools" ]
+            ]
         , div [ class "detail-stats" ]
             [ detailStat "Destination" (display c.destinationCountry) "Country"
             , detailStat "Visa type" (display c.visaType) "Category"
-            , detailStat "Next deadline" (display c.nextDeadline) "Target"
-            , detailStat "Assigned" (display c.assignedOfficer) "Officer"
+
             ]
         , div [ class "detail__grid" ]
             [ aside [ class "detail__sidebar" ]
-                [ detailCard "Case info"
+                [ detailCard "Application info"
                     Nothing
                     (div [ class "info-list" ]
                         [ infoRow iconUserTiny "Student" (display c.studentName)
@@ -517,17 +535,7 @@ caseDetailView model c =
                         )
                     )
                     (documentsPanel model c)
-                , detailCard "Next action"
-                    Nothing
-                    (if String.isEmpty c.nextAction then
-                        p [ class "detail-muted" ] [ text "No next action set." ]
 
-                     else
-                        div [ class "info-list" ]
-                            [ infoRow iconTasks "Action" c.nextAction
-                            , infoRow iconCalendar "Deadline" (display c.nextDeadline)
-                            ]
-                    )
                 ]
             ]
         , div [ class "bottom-row" ]
@@ -718,24 +726,25 @@ caseFormView model cf isEdit =
                 "Save changes"
 
             else
-                "Save case"
+                "Save application"
     in
     form [ onSubmit SubmittedCaseForm, Attr.novalidate True ]
-        [ case formError of
+        [ Html.node "crm-draft-recovery" [] []
+        , case formError of
             Just msg ->
                 div [ class "ecc-alert ecc-alert--error" ] [ text msg ]
 
             Nothing ->
                 text ""
         , div [ class "form-grid" ]
-            [ caseRichField cf "caseNumber" "Case number (auto if empty)" "text"
+            [ caseRichField cf "caseNumber" "Application number (auto if empty)" "text"
             , caseStudentSelect model cf
             , caseClientSelect model cf
             , caseRichField cf "serviceCategory" "Service category" "text"
             , caseRichField cf "destinationCountry" "Destination (e.g. CA)" "text"
             , caseRichField cf "visaType" "Visa type" "text"
             , caseRichField cf "schoolOrEmployer" "School or employer" "text"
-            , caseRichField cf "assignedOfficer" "Assigned officer" "text"
+            , div [] [ StaffPicker.view "cf-assignedOfficer" "cases" model.editingCaseId cf.assignedOfficer "Assigned officer" cf.submitting (UpdatedCaseFormField "assignedOfficer"), p [ class "ecc-field__message" ] [ text (Maybe.withDefault "" (caseFormFieldError "assignedOfficer" cf)) ], (if isEdit then p [] [ text "Transferring responsibility? ", a [ Attr.href ("/cases/" ++ Maybe.withDefault "" model.editingCaseId ++ "#handoff") ] [ text "Use Ownership and handoffs" ] ] else text "") ]
             , caseRichField cf "externalAdviser" "External adviser" "text"
             , caseRichField cf "dateOpened" "Date opened" "date"
             , caseRichField cf "targetSubmission" "Target submission" "date"
@@ -752,7 +761,7 @@ caseFormView model cf isEdit =
             [ span [ class "ecc-field__label" ] [ text "Notes" ]
             , textarea
                 [ id "cf-notes"
-                , placeholder "Case notes…"
+                , placeholder "Application notes…"
                 , value cf.notes
                 , onInput (UpdatedCaseFormField "notes")
                 , disabled cf.submitting
@@ -796,15 +805,16 @@ caseFormModal model cf =
 
         titleText =
             if isEdit then
-                "Edit case"
+                "Edit application"
 
             else
-                "Add case"
+                "Add application"
     in
     div [ class "modal-backdrop", onClick RequestedCloseCaseForm ]
         [ div
             [ class "modal modal--wide"
             , Attr.attribute "role" "dialog"
+            , Attr.attribute "data-draft-record-id" (Maybe.withDefault "new" model.editingCaseId)
             , Attr.attribute "aria-modal" "true"
             , Attr.attribute "aria-label" titleText
             , Html.Events.stopPropagationOn "click"
@@ -866,12 +876,12 @@ deleteCaseConfirmModal c =
             [ class "modal modal--narrow"
             , Attr.attribute "role" "alertdialog"
             , Attr.attribute "aria-modal" "true"
-            , Attr.attribute "aria-label" "Delete case"
+            , Attr.attribute "aria-label" "Delete application"
             , Html.Events.stopPropagationOn "click"
                 (D.succeed ( NoOp, True ))
             ]
             [ header [ class "modal__header" ]
-                [ h2 [ class "modal__title" ] [ text "Delete case" ]
+                [ h2 [ class "modal__title" ] [ text "Delete application" ]
                 , button
                     [ class "modal__close"
                     , type_ "button"
@@ -1032,7 +1042,8 @@ documentFormView df isEdit =
                 "Save document"
     in
     form [ onSubmit SubmittedDocumentForm, Attr.novalidate True ]
-        [ case formError of
+        [ Html.node "crm-draft-recovery" [] []
+        , case formError of
             Just msg ->
                 div [ class "ecc-alert ecc-alert--error" ] [ text msg ]
 
@@ -1136,6 +1147,7 @@ documentFormModal model df =
         [ div
             [ class "modal modal--wide"
             , Attr.attribute "role" "dialog"
+            , Attr.attribute "data-draft-record-id" (Maybe.withDefault "new" model.editingDocumentId)
             , Attr.attribute "aria-modal" "true"
             , Attr.attribute "aria-label" titleText
             , Html.Events.stopPropagationOn "click"

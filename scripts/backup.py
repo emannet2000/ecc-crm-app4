@@ -9,6 +9,8 @@ from pathlib import Path
 import sqlite3
 import tarfile
 import tempfile
+import hashlib
+import io
 
 
 def backup(database, destination, secret=None):
@@ -30,12 +32,29 @@ def backup(database, destination, secret=None):
                     raise ValueError('Database integrity check failed')
             with os.fdopen(fd, 'wb') as file, tarfile.open(fileobj=file, mode='w:gz') as archive:
                 fd = None
+                checksums = {}
+                def remember(source, name):
+                    digest = hashlib.sha256()
+                    with source.open('rb') as content:
+                        for chunk in iter(lambda: content.read(1024 * 1024), b''):
+                            digest.update(chunk)
+                    checksums[name] = digest.hexdigest()
+                remember(snapshot, 'crm.sqlite3')
                 archive.add(snapshot, arcname='crm.sqlite3')
                 uploads = database.parent / 'uploads'
                 if uploads.exists():
+                    for uploaded in uploads.rglob('*'):
+                        if uploaded.is_file():
+                            remember(uploaded, 'uploads/' + uploaded.relative_to(uploads).as_posix())
                     archive.add(uploads, arcname='uploads')
                 if secret.exists():
+                    remember(secret, 'auth-secret')
                     archive.add(secret, arcname='auth-secret')
+                content = json.dumps({'version': 1, 'files': checksums}).encode()
+                entry = tarfile.TarInfo('backup-manifest.json')
+                entry.size = len(content)
+                entry.mode = 0o600
+                archive.addfile(entry, io.BytesIO(content))
     except BaseException:
         if fd is not None:
             os.close(fd)
@@ -52,10 +71,12 @@ if __name__ == '__main__':
     status_path = Path(args.database).resolve().parent / 'backup-status.json'
     try:
         backup(args.database, args.destination, args.secret)
+        from verify_backup import verify_backup
+        verification = verify_backup(args.destination)
     except Exception as error:
         status_path.write_text(json.dumps({'state': 'failed', 'checkedAt': __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(), 'message': str(error)[:300]}))
         os.chmod(status_path, 0o600)
         raise
-    status_path.write_text(json.dumps({'state': 'ok', 'checkedAt': __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(), 'destination': str(Path(args.destination).resolve())}))
+    status_path.write_text(json.dumps({'state': 'ok', 'checkedAt': __import__('datetime').datetime.now(__import__('datetime').timezone.utc).isoformat(), 'destination': str(Path(args.destination).resolve()), 'restoreVerification': verification}))
     os.chmod(status_path, 0o600)
     print(f'Backup created: {args.destination}')

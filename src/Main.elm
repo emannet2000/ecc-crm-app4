@@ -69,6 +69,7 @@ init flags url key =
             , showPassword = False
             , bootstrapping = flags.token /= Nothing
             , route = route
+            , workspaceQuery = Maybe.withDefault "" url.query
             , contacts = NotAsked
             , viewingContact = Nothing
             , contactForm = Nothing
@@ -100,6 +101,7 @@ init flags url key =
             , editingTaskId = Nothing
             , deletingTask = Nothing
             , pendingContactsQuery = Nothing
+            , dealsRequestId = 0
             , pendingDealsQuery = Nothing
             , pendingTasksQuery = Nothing
             , profileForm = emptyProfileForm

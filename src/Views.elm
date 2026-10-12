@@ -85,7 +85,7 @@ pageContent model user =
                 tasksView model
 
             Workspace ->
-                Html.node "crm-workspace" [ class "workspace-tools" ] []
+                Html.node "crm-workspace" [ class "workspace-tools", Attr.attribute "workspace-query" model.workspaceQuery ] []
 
             Administration ->
                 if user.role == "admin" then
@@ -328,7 +328,7 @@ pageContent model user =
                 text ""
         , case model.paymentForm of
             Just pf ->
-                paymentFormModal pf
+                paymentFormModal model pf
 
             Nothing ->
                 text ""

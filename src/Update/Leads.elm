@@ -127,6 +127,15 @@ update msg model =
                     let
                         updated =
                             case field of
+                                "nextAction" ->
+                                    { lf | nextAction = value }
+
+                                "duplicateConfirmed" ->
+                                    { lf | duplicateConfirmed = value == "true" }
+
+                                "referrer" ->
+                                    { lf | referrer = value }
+
                                 "leadNumber" ->
                                     { lf | leadNumber = value }
 
@@ -134,10 +143,10 @@ update msg model =
                                     { lf | name = value }
 
                                 "email" ->
-                                    { lf | email = value }
+                                    { lf | email = value, duplicateConfirmed = False }
 
                                 "phone" ->
-                                    { lf | phone = value }
+                                    { lf | phone = value, duplicateConfirmed = False }
 
                                 "nationality" ->
                                     { lf | nationality = value }
@@ -175,7 +184,7 @@ update msg model =
                                 { updated
                                     | dirty = True
                                     , errors =
-                                        List.filter (\( f, _ ) -> f /= field) updated.errors
+                                        List.filter (\( f, _ ) -> f /= field || field == "duplicateConfirmed") updated.errors
                                 }
                       }
                     , Cmd.none

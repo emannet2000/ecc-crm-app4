@@ -29,8 +29,12 @@
     root.append(container);
   }
   class Workspace extends HTMLElement {
+    static get observedAttributes() { return ['workspace-query']; }
     constructor() { super(); this.attachShadow({mode: 'open'}); }
-    connectedCallback() {
+    connectedCallback() { this.mount(); }
+    attributeChangedCallback() { if (this.isConnected) this.mount(); }
+    mount() {
+      this.stop?.(); this.shadowRoot.replaceChildren();
       shell(this.shadowRoot);
       this.stop = window.mountWorkspaceTools(this.shadowRoot);
     }
@@ -50,7 +54,22 @@
       try {
         const detail = await request('/api/records/' + encodeURIComponent(entity) + '/' + encodeURIComponent(id));
         if (!this.isConnected || generation !== this.generation) return;
-        const tabs = {contacts: 'email', cases: 'documents', students: 'workflows', deals: 'workflows', leads: 'workflows', schools: 'workflows', agents: 'workflows', partners: 'workflows', invoices: 'workflows'};
+        const tabs = {contacts: 'email', cases: 'overview', students: 'workflows', deals: 'workflows', leads: 'documents', schools: 'workflows', agents: 'workflows', partners: 'workflows', invoices: 'workflows'};
+        if(['deals','students'].includes(entity)){
+          const record=detail.record,summary=node('section',null,{class:'card record-summary','aria-label':'Record summary'});
+          const owner=record.assignedTo||record.assignedOfficer||record.owner||record.ownerId||'Unassigned';
+          const fields=[['Status',record.status||record.currentStage||record.stage||record.applicationStage||record.acceptanceStatus],['Responsible staff',owner],['Created',record.createdAt],['Deadline / follow-up',record.followUpDate||record.nextDeadline||record.closeDate||record.travelDate]];
+          summary.append(node('h3','Record summary'));for(const [label,value]of fields){const line=node('p',label+': ');line.append(label==='Responsible staff'?node('crm-staff-name',null,{value:value||''}):document.createTextNode(value||'Not set'));summary.append(line)}
+          summary.append(node('crm-work-plan',null,{entity,'record-id':id}));
+          this.shadowRoot.querySelector('#tabs').before(summary);
+
+        }
+        if(entity==='cases'){const gates=node('details');gates.append(node('summary','Stage readiness and policy'),node('crm-stage-gates',null,{'record-id':id}));this.shadowRoot.querySelector('#tabs').before(gates);}
+        if(['cases','students'].includes(entity)){
+          const history=node('details'),summary=node('summary','Unified client timeline');history.append(summary);history.addEventListener('toggle',()=>{if(history.open&&!history.querySelector('crm-client-history'))history.append(node('crm-client-history',null,{entity,'record-id':id}))});this.shadowRoot.querySelector('#tabs').before(history);
+        }
+        const relatedClient=entity==='contacts'?id:detail.record.clientId||detail.record.contactId||detail.record.convertedContactId;
+        if(relatedClient){const links=node('nav',null,{class:'links','aria-label':'Related client'});links.append(node('a','Client profile and history',{href:'/contacts/'+encodeURIComponent(relatedClient)+'#record-tools?tab=history'}));this.shadowRoot.querySelector('#tabs').before(links)}
         this.stop = window.mountWorkspaceTools(this.shadowRoot, {entity, id, editable: detail.editable, tab: tabs[entity]});
       } catch (error) {
         if (generation === this.generation) main.replaceChildren(node('p', error.message));
@@ -183,6 +202,9 @@
           result.replaceChildren();
           if (this.getAttribute('mode') !== 'dashboard') {
             result.append(node('p', out.cohort));
+            if(out.operations){const ops=out.operations;result.append(node('p',ops.method));result.append(table('Staff workload and overdue work',ops.workload,[['responsible','Responsible staff'],['leads','Open leads'],['applications','Active applications'],['overdue','Overdue actions'],['missingPlans','Missing action/deadline'],['documents','Document follow-ups']]));result.append(table('Collections by currency',ops.collections,[['currency','Currency'],['received','Received'],['outstanding','Outstanding'],['overdue','Overdue'],['pending','Accessible pending receipts']]));result.append(table('Long-running applications — review for delays',ops.stalled,[['record','Application'],['stage','Stage'],['days','Days'],['basis','Measurement basis'],['responsible','Responsible staff'],['action','Next action']]));}
+
+            if(out.leadPipeline){result.append(node('p',out.leadPipelineMethod));result.append(table('Lead pipeline by source and referrer',out.leadPipeline.map(row=>({...row,averageFirstFollowUpHours:row.averageFirstFollowUpHours==null?'Not measured':row.averageFirstFollowUpHours})),[['source','Source'],['referrer','Referrer'],['leads','Inquiries'],['converted','Converted'],['rate','Conversion %'],['withoutLoggedFollowUp','No logged follow-up'],['overdue','Overdue'],['timedFollowUps','Timed follow-ups'],['averageFirstFollowUpHours','Average hours to first follow-up']]));}
             result.append(table('Lead conversion by source', out.sources, [['source','Source'],['leads','Leads'],['converted','Converted'],['rate','Conversion %']]));
             result.append(table('Enrolments by school and intake', out.enrollment, [['school','School'],['intake','Intake'],['students','Students'],['enrolled','Enrolled']]));
             result.append(table('Agent performance', out.agents, [['agent','Agent'],['students','Students'],['enrolled','Enrolled']]));
@@ -208,52 +230,77 @@
       const apply = () => {
         if (sidebar) sidebar.dataset.focus = select.value;
         document.documentElement.dataset.navFocus = select.value;
+        document.documentElement.dataset.showDeals = String(!!window.CRMConsolidation?.preferences().deals);
         window.dispatchEvent(new CustomEvent('ecc-navigation-focus', {detail:select.value}));
       };
       select.value = readFocus(key, this.getAttribute('default-focus') || 'adviser');
       select.onchange = () => { try { localStorage.setItem(key, select.value); } catch {} apply(); };
       label.append(select); this.append(label); apply();
+      const optional = node('details', null, {class:'optional-tools'});
+      optional.append(node('summary', 'Optional tools'));
+      for (const [name, title] of [['deals','Show Deals while advising'],['qr','Show QR tools']]) {
+        const row = node('label', title), input = node('input', null, {type:'checkbox', 'aria-label':title});
+        input.checked = !!window.CRMConsolidation?.preferences()[name];
+        input.onchange = () => window.CRMConsolidation?.savePreferences({...window.CRMConsolidation.preferences(), [name]:input.checked});
+        row.prepend(input); optional.append(row);
+      }
+      this.append(optional);
     }
   }
   class MyWork extends HTMLElement {
     constructor() { super(); this.attachShadow({mode:'open'}); this.generation = 0; }
     connectedCallback() {
+      if(this.shadowRoot.firstChild)return;
       style(this.shadowRoot);
-      const root = node('section', null, {class:'tools daily-work'}), result = node('div', null, {'aria-live':'polite'});
-      const toolbar = node('form', null, {class:'toolbar'}), label = node('label','Show work'), scope = node('select', null, {name:'scope', 'aria-label':'Work assignment'});
-      for (const [value,text] of [['mine','Mine and unassigned'],['unassigned','Unassigned'],['all','All accessible work']]) scope.append(node('option',text,{value}));
-      label.append(scope); const refresh = node('button','Refresh work',{type:'submit',class:'secondary'});
-      toolbar.append(label,refresh); root.append(node('h2','My work today'),node('p','Applications, follow-ups and tasks that need your attention. Unassigned work is included so it does not get missed.'),toolbar,result);this.shadowRoot.append(root);
-      let offset=0;
-      this.load = async () => {
-        const generation=++this.generation; refresh.disabled=true;result.replaceChildren(node('p','Loading your work…'));
-        try {
-          const focus=document.documentElement.dataset.navFocus||'adviser';
-          const out=await request('/api/my-work?'+new URLSearchParams({scope:scope.value,focus,offset:String(offset),limit:'25'}));
+      const root=node('section',null,{class:'tools daily-work'}), result=node('div',null,{'aria-label':'Matching work records'});
+      const toolbar=node('form',null,{class:'toolbar'}),label=node('label','Show work'),scope=node('select',null,{name:'scope','aria-label':'Work assignment'});
+      for(const [value,text] of [['mine','Mine and unassigned'],['unassigned','Unassigned'],['all','All accessible work']])scope.append(node('option',text,{value}));
+      label.append(scope);const refresh=node('button','Refresh work',{type:'submit',class:'secondary'});
+      const summary=node('p'),counts=node('div',null,{class:'work-counts'}),totals=node('div',null,{class:'work-counts'}),selected=node('div',null,{class:'actions'}),heading=node('h3','All work');
+      const clear=node('button','Show all work',{type:'button',class:'secondary'}),notice=node('p',null,{role:'status','aria-live':'polite'});
+      clear.hidden=true;selected.append(heading,clear);toolbar.append(label,refresh);
+      const overview=node('details',null,{class:'journey-section'});overview.append(node('summary','Browse all records'),node('p','All stages in the selected assignment view. Open pipeline excludes won and lost deals.'),totals);
+      root.append(node('p','Unassigned work is included so it does not get missed.'),toolbar,summary,node('h2','Needs attention'),node('p','These counts overlap: a record can be overdue and also need documents.'),counts,overview,selected,notice,result);this.shadowRoot.append(root);
+      let offset=0,category='',categoryTitle='All work';
+      const cards=[];
+      for(const [key,title] of [['deals','Deals'],['pipeline','Open pipeline'],['leads','Leads'],['students','Students'],['cases','All applications'],['applications','Applications'],['followups','Follow-ups'],['overdueLeads','Overdue lead follow-ups'],['documents','Applications needing documents'],['documentIssues','Document follow-ups'],['deadlines','Due within 7 days / overdue'],['tasks','Tasks'],['handoffs','Pending handoffs'],['overdueHandoffs','Overdue handoffs'],['pendingApprovals','Receipts awaiting approval'],['invoices','Invoices requiring attention']]){
+        const card=node('button',null,{type:'button',class:'work-count','aria-pressed':'false','data-category':key}),value=node('strong','–');
+        card.append(value,node('span',title));card.setAttribute('aria-label',title+'. Show matching work');
+        card.onclick=()=>{category=key;categoryTitle=title;offset=0;this.load()};(['deals','pipeline','leads','students','cases'].includes(key)?totals:counts).append(card);cards.push({key,title,card,value});
+      }
+      this.load=async()=>{
+        const generation=++this.generation,requestedCategory=category,requestedOffset=offset;
+        const focus=document.documentElement.dataset.navFocus||'adviser';
+        refresh.disabled=true;result.inert=true;result.setAttribute('aria-busy','true');notice.textContent='Loading '+categoryTitle.toLowerCase()+'…';
+        heading.textContent=categoryTitle;clear.hidden=!category;
+        for(const {key,card} of cards){card.setAttribute('aria-pressed',String(category===key));card.hidden=false;}
+        try{
+          const out=await request('/api/my-work?'+new URLSearchParams({scope:scope.value,focus,category:requestedCategory,offset:String(requestedOffset),limit:'25'}));
           if(!this.isConnected||generation!==this.generation)return;
-          result.replaceChildren(node('p',`${out.today} · ${out.total} work items · full accessible dataset`));
-          const counts=node('div',null,{class:'work-counts'});
-          for(const [key,title] of [['applications','Applications'],['followups','Follow-ups'],['documents','Applications needing documents'],['deadlines','Due within 7 days / overdue'],['tasks','Tasks'],['handoffs','Pending handoffs'],['overdueHandoffs','Overdue handoffs'],['pendingApprovals','Receipts awaiting approval'],['invoices','Invoices requiring attention']]){
-            if(['invoices','pendingApprovals'].includes(key)&&focus!=='finance')continue;
-            const card=node('div',null,{class:'work-count'});card.append(node('strong',out.counts?.[key]||0),node('span',title));counts.append(card);
-          }
-          result.append(counts);
-          if(!out.items?.length){result.append(node('p','No work items in this view. Choose All accessible work to check other assignments.'));return;}
+          if(requestedCategory&&out.category!==requestedCategory)throw new Error('The server did not apply this work filter. Restart the CRM server with the latest build, then use Refresh work.');
+          summary.textContent=`${out.today} · ${out.total} work items · full accessible dataset`;
+          for(const {key,title,card,value} of cards){value.textContent=String(out.counts?.[key]||0);card.setAttribute('aria-label',`${title}: ${value.textContent}. Show matching work`);}
+          result.replaceChildren();notice.textContent='';
+          if(!out.items?.length){result.append(node('p',category?'No matching work items in this view. Choose Show all work or change the assignment filter.':'No work items in this view. Choose All accessible work to check other assignments.'));return;}
           for(const item of out.items){
             const card=node('article',null,{class:'card work-item work-item--'+item.priority});
-            card.append(node('a',item.name,{href:item.route,class:'work-item__title'}),node('p',item.reason),node('p',item.action||'Open the record and choose the next action.'));
-            if(item.deadline)card.append(node('p','Due '+item.deadline));
-            result.append(card);
+            card.append(node('a',item.name,{href:item.route,class:'work-item__title'}),node('p','Needs attention: '+item.reason),node('p','Next action: '+(item.action||'Choose the next action.')),node('p','Responsible: '+(item.owner||'Unassigned')));
+            card.append(node('p',item.deadline?'Due '+item.deadline:'Deadline: Not set'));
+            if(item.details?.length){const details=node('details',null,{class:'work-item__details'});details.append(node('summary','More context'));for(const detail of item.details)details.append(node('p',detail));card.append(details);}
+            const actionLabel={case:'Review application and next action',lead:'Review lead and follow up',deal:'Review deal and next action',student:'Review student journey',task:'Review and update task',invoice:'Review balance and receipts',handoff:'Review handoff',document:'Review document requirement'}[item.entity]||'Review and take action';
+            card.append(node('a',actionLabel,{href:item.route,class:'button secondary','aria-label':actionLabel+' — '+item.name}));result.append(card);
           }
-          const pager=node('div',null,{class:'actions'});pager.append(node('span',`${offset+1}–${Math.min(offset+25,out.total)} of ${out.total}`));
-          for(const [text,next,enabled] of [['Previous',offset-25,offset>0],['Next',offset+25,offset+25<out.total]]){if(!enabled)continue;const button=node('button',text,{type:'button',class:'secondary'});button.onclick=()=>{offset=next;this.load()};pager.append(button)}result.append(pager);
-        } catch(error){if(generation===this.generation){result.replaceChildren(node('p',error.message));}}
-        finally{if(generation===this.generation)refresh.disabled=false;}
+          const pager=node('div',null,{class:'actions'});pager.append(node('span',`${requestedOffset+1}–${Math.min(requestedOffset+out.items.length,out.total)} of ${out.total}`));
+          for(const [text,next,enabled] of [['Previous',requestedOffset-25,requestedOffset>0],['Next',requestedOffset+25,requestedOffset+25<out.total]]){if(!enabled)continue;const button=node('button',text,{type:'button',class:'secondary'});button.onclick=()=>{offset=next;this.load()};pager.append(button)}result.append(pager);
+        }catch(error){if(generation===this.generation){result.replaceChildren();notice.textContent=error.message;}}
+        finally{if(generation===this.generation){refresh.disabled=false;result.inert=false;result.setAttribute('aria-busy','false');}}
       };
+      clear.onclick=()=>{category='';categoryTitle='All work';offset=0;this.load()};
       toolbar.onsubmit=event=>{event.preventDefault();offset=0;this.load()};scope.onchange=()=>{offset=0;this.load()};
+      this.overviewClick=event=>{const target=event.target.closest?.('[data-work-category]');if(!target)return;if(event.type==='keydown'&&!['Enter',' '].includes(event.key))return;event.preventDefault();const match=cards.find(card=>card.key===target.dataset.workCategory);if(!match)return;scope.value='all';overview.open=true;category=match.key;categoryTitle=match.title;offset=0;this.load();selected.scrollIntoView({block:'center',behavior:'smooth'});};document.addEventListener('click',this.overviewClick);document.addEventListener('keydown',this.overviewClick);
       this.focusChanged=()=>{offset=0;this.load()};window.addEventListener('ecc-navigation-focus',this.focusChanged);window.addEventListener('crm:record-changed',this.focusChanged);this.load();
     }
-    disconnectedCallback(){this.generation++;window.removeEventListener('ecc-navigation-focus',this.focusChanged);window.removeEventListener('crm:record-changed',this.focusChanged);this.shadowRoot.replaceChildren();}
+    disconnectedCallback(){this.generation++;document.removeEventListener('click',this.overviewClick);document.removeEventListener('keydown',this.overviewClick);window.removeEventListener('ecc-navigation-focus',this.focusChanged);window.removeEventListener('crm:record-changed',this.focusChanged);this.shadowRoot.replaceChildren();}
   }
   class StudentJourney extends HTMLElement {
     static get observedAttributes(){return ['record-id'];}
@@ -269,10 +316,11 @@
         const out=await request('/api/students/'+encodeURIComponent(this.getAttribute('record-id'))+'/journey');if(!this.isConnected||generation!==this.generation)return;
         result.replaceChildren(node('p',`${out.verified} of ${out.required} required documents verified · ${out.student?.applicationStage||'Application stage not set'} · ${out.student?.intake||'Intake not set'}`));
         const applications=out.applications||[];
-        if(!applications.length)result.append(node('p','No linked applications yet. Use Application tools & create case to begin.'));
+        if(!applications.length)result.append(node('p','No linked applications yet. Use Application tools to create an application.'));
         for(const app of applications){
-          const card=node('article',null,{class:'card'});card.append(node('a',app.caseNumber,{href:'/cases/'+app.id}),node('p',`Stage: ${app.currentStage} · Owner: ${app.assignedOfficer||'Unassigned'}`),node('p','Next action: '+(app.nextAction||'Choose the next staff action')),node('p','Deadline: '+(app.nextDeadline||'Not set')));
-          const links=node('div',null,{class:'links'});for(const [tab,label] of [['documents','Review documents'],['conversations','Messages'],['workflows','Application tools']])links.append(node('a',label,{href:'/cases/'+app.id+'#record-tools?tab='+tab}));card.append(links);const handoff=node('crm-case-handoff',null,{'record-id':app.id});card.append(node('crm-application-blockers',null,{'record-id':app.id}),handoff);result.append(card);
+          const card=node('article',null,{class:'card'});card.append(node('a',app.caseNumber,{href:'/cases/'+app.id}),node('p',`Stage: ${app.currentStage}`),node('p','Next action: '+(app.nextAction||'Choose the next staff action')),node('p','Deadline: '+(app.nextDeadline||'Not set')));
+          const owner=node('p','Assigned adviser: ');owner.append(node('crm-staff-name',null,{value:app.assignedOfficer||''}));card.append(owner);
+          const links=node('div',null,{class:'links'});links.append(node('a','Ownership and handoffs',{href:'/cases/'+app.id+'#handoff'}));for(const [tab,label] of [['documents','Review documents'],['conversations','Messages'],['workflows','Application tools']])links.append(node('a',label,{href:'/cases/'+app.id+'#record-tools?tab='+tab}));card.append(links);const handoff=node('crm-case-handoff',null,{'record-id':app.id});card.append(node('crm-application-blockers',null,{'record-id':app.id}),handoff);result.append(card);
         }
         const sections=[
           ['Documents',(out.documents||[]).map(d=>({record:d.docName,status:d.status,required:d.required?'Required':'Optional',url:'/cases/'+d.caseId+'#record-tools?tab=documents'})),[['record','Document'],['status','Status'],['required','Requirement']]],
@@ -346,7 +394,7 @@
   customElements.define('crm-ai-productivity', AIProductivity);
   const updateTheme = () => {
     const theme=localStorage.getItem('theme') || 'light';
-    for (const element of document.querySelectorAll('crm-workspace,crm-record-tools,crm-insights,crm-ai-productivity,crm-ai-chat,crm-administration,crm-student-journey,crm-my-work,crm-recent-changes,crm-form-quality,crm-integration-health')) { if(element.dataset.theme!==theme)element.dataset.theme=theme; }
+    for (const element of document.querySelectorAll('crm-workspace,crm-record-tools,crm-insights,crm-ai-productivity,crm-ai-chat,crm-administration,crm-student-journey,crm-my-work,crm-recent-changes,crm-form-quality,crm-integration-health,crm-lead-work,crm-application-blockers,crm-work-plan,crm-client-history,crm-priority-queues,crm-operational-attention,crm-reconciliation')) { if(element.dataset.theme!==theme)element.dataset.theme=theme; }
   };
   new MutationObserver(updateTheme).observe(document.getElementById('app'), {childList:true, subtree:true});
   window.addEventListener('crm:theme-changed', updateTheme);

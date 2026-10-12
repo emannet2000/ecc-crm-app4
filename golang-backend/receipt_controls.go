@@ -46,8 +46,8 @@ func pendingInvoiceReceiptCounts(r *http.Request) (map[string]int, error) {
 }
 
 func handleReceiptReview(w http.ResponseWriter, r *http.Request) {
-	if !isManager(currentUser(r)) {
-		writeError(w, 403, "Manager approval is required")
+	if !financeCapability(r, "approveAdjustments") {
+		writeError(w, 403, "Finance adjustment approval permission is required")
 		return
 	}
 	var in struct{ Decision string }
@@ -128,10 +128,13 @@ func handleInvoiceFinanceStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "Could not load receipts")
 		return
 	}
+	posted := []Payment{}
 	pending := []Payment{}
 	for _, p := range payments {
 		if pendingReceipt(p) {
 			pending = append(pending, p)
+		} else if receiptActive(p) {
+			posted = append(posted, p)
 		}
 	}
 	// Balances are invoice aggregates; pending totals include the full linked
@@ -143,5 +146,5 @@ func handleInvoiceFinanceStatus(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 500, "Could not load approval totals")
 		return
 	}
-	writeJSON(w, 200, map[string]any{"invoice": inv, "pendingReceipts": pending, "pendingAmount": money(amount), "pendingCount": count, "canReview": isManager(currentUser(r)), "approvalNote": inv.PaymentApproval})
+	writeJSON(w, 200, map[string]any{"invoice": inv, "postedReceipts": posted, "today": organizationToday(r), "pendingReceipts": pending, "pendingAmount": money(amount), "pendingCount": count, "canReview": financeCapability(r, "approveAdjustments"), "approvalNote": inv.PaymentApproval})
 }

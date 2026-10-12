@@ -5,10 +5,11 @@ module View.Leads exposing (deleteLeadConfirmModal, leadDetailView, leadFormModa
 
 import Html exposing (..)
 import Html.Attributes as Attr exposing (class, disabled, for, id, placeholder, type_, value)
-import Html.Events exposing (onClick, onInput, onSubmit)
+import Html.Events exposing (onCheck, onClick, onInput, onSubmit)
 import Json.Decode as D
 import Svg
 import Types exposing (..)
+import View.StaffPicker as StaffPicker
 import View.Helpers exposing (detailCard, detailStat, infoRow, initials, paginationBar, svgIcon, svgPath)
 import View.Icons exposing (iconBack, iconCalendar, iconContacts, iconDeals, iconEdit, iconMail, iconPhone, iconPin, iconTasks, iconTrash, iconUserTiny)
 
@@ -317,7 +318,8 @@ leadDetailView _ l =
                     ]
                 ]
             , div [ class "detail-hero__actions" ]
-                [ button
+                [ a [ class "ecc-btn ecc-btn--primary ecc-btn--inline", Attr.href "#record-tools?tab=documents" ] [ text "CV & conversion" ]
+                , button
                     [ class "ecc-btn ecc-btn--ghost ecc-btn--inline"
                     , type_ "button"
                     , onClick (OpenedEditLead l)
@@ -338,22 +340,22 @@ leadDetailView _ l =
         , div [ class "detail-stats" ]
             [ detailStat "Source" l.source "Channel"
             , detailStat "Destination" (display l.interestedCountry) "Interested"
-            , detailStat "Follow-up" (display l.followUpDate) "Next touch"
-            , detailStat "Assigned to" (display l.assignedTo) "Consultant"
+
             ]
+        , node "crm-lead-work" [ Attr.attribute "record-id" l.id ] []
         , div [ class "detail__grid" ]
             [ aside [ class "detail__sidebar" ]
                 [ detailCard "About"
                     Nothing
                     (div [ class "info-list" ]
                         [ infoRow iconUserTiny "Lead number" (display l.leadNumber)
+                        , infoRow iconContacts "Referrer" (display l.referrer)
                         , infoRow iconMail "Email" (display l.email)
                         , infoRow iconPhone "Phone" (display l.phone)
                         , infoRow iconPin "Nationality" (display l.nationality)
                         , infoRow iconPin "Currently in" (display l.currentCountry)
                         , infoRow iconPin "Interested in" (display l.interestedCountry)
                         , infoRow iconDeals "Service" (display l.interestedService)
-                        , infoRow iconCalendar "Follow-up" (display l.followUpDate)
                         ]
                     )
                 , detailCard "Notes"
@@ -366,11 +368,10 @@ leadDetailView _ l =
                     )
                 ]
             , div [ class "detail__main" ]
-                [ detailCard "Conversion"
+                [ detailCard "Inquiry tracking"
                     Nothing
                     (div [ class "info-list" ]
                         [ infoRow iconTasks "Status" l.status
-                        , infoRow iconContacts "Assigned to" (display l.assignedTo)
                         , infoRow iconCalendar "Created" (display l.createdAt)
                         ]
                     )
@@ -392,6 +393,12 @@ leadRichField lf fieldId labelText inputType =
     let
         currentValue =
             case fieldId of
+                "nextAction" ->
+                    lf.nextAction
+
+                "referrer" ->
+                    lf.referrer
+
                 "leadNumber" ->
                     lf.leadNumber
 
@@ -503,7 +510,8 @@ leadFormView model lf isEdit =
                 "Save lead"
     in
     form [ onSubmit SubmittedLeadForm, Attr.novalidate True ]
-        [ case formError of
+        [ Html.node "crm-draft-recovery" [] []
+        , case formError of
             Just msg ->
                 div [ class "ecc-alert ecc-alert--error" ] [ text msg ]
 
@@ -518,8 +526,10 @@ leadFormView model lf isEdit =
             , leadRichField lf "currentCountry" "Currently in (e.g. PH)" "text"
             , leadRichField lf "interestedCountry" "Interested country (e.g. CA)" "text"
             , leadRichField lf "interestedService" "Interested service" "text"
-            , leadRichField lf "assignedTo" "Assigned consultant" "text"
+            , leadRichField lf "referrer" "Referrer / referred by" "text"
+            , div [] [ StaffPicker.view "lf-assignedTo" "leads" model.editingLeadId lf.assignedTo "Assigned consultant" lf.submitting (UpdatedLeadFormField "assignedTo"), p [ class "ecc-field__message" ] [ text (Maybe.withDefault "" (leadFormFieldError "assignedTo" lf)) ] ]
             , leadRichField lf "followUpDate" "Follow-up date" "date"
+            , leadRichField lf "nextAction" "Next staff action" "text"
             ]
         , leadStatusPills "Source"
             lf.source
@@ -528,7 +538,7 @@ leadFormView model lf isEdit =
             lf.submitting
         , leadStatusPills "Status"
             lf.status
-            leadStatuses
+            (if lf.status == "Converted" then [ "Converted" ] else List.filter ((/=) "Converted") leadStatuses)
             (UpdatedLeadFormField "status")
             lf.submitting
         , div [ class "ecc-field ecc-field--notes" ]
@@ -549,10 +559,22 @@ leadFormView model lf isEdit =
             , Attr.attribute "email" lf.email
             , Attr.attribute "phone" lf.phone
             , Attr.attribute "followUpDate" lf.followUpDate
+            , Attr.attribute "nextAction" lf.nextAction
             , Attr.attribute "status" lf.status
             , Attr.attribute "record-id" (Maybe.withDefault "" model.editingLeadId)
             ]
             []
+        , case leadFormFieldError "duplicateConfirmed" lf of
+            Just message ->
+                div [ class "ecc-alert ecc-alert--error" ]
+                    [ p [] [ text message ]
+                    , label []
+                        [ input [ type_ "checkbox", Attr.checked lf.duplicateConfirmed, onCheck (\checked -> UpdatedLeadFormField "duplicateConfirmed" (if checked then "true" else "false")), disabled lf.submitting ] []
+                        , text " I reviewed matching records above; this is a separate inquiry."
+                        ]
+                    ]
+            Nothing ->
+                text ""
         , div [ class "modal__actions" ]
             [ button
                 [ type_ "button"
@@ -588,6 +610,7 @@ leadFormModal model lf =
         [ div
             [ class "modal modal--wide"
             , Attr.attribute "role" "dialog"
+            , Attr.attribute "data-draft-record-id" (Maybe.withDefault "new" model.editingLeadId)
             , Attr.attribute "aria-modal" "true"
             , Attr.attribute "aria-label" titleText
             , Html.Events.stopPropagationOn "click"

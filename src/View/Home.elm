@@ -1,4 +1,4 @@
-module View.Home exposing (homeView)
+module View.Home exposing (homeView, managementChartsView)
 
 {-| Dashboard home page: 5-stat row, deal pipeline
 donut, win-rate gauge, pipeline-value bar chart, contribution
@@ -18,7 +18,17 @@ import View.Heatmap exposing (activityHeatmap)
 
 statCard : String -> String -> String -> Html Msg
 statCard label valueText hint =
-    div [ class "stat-card" ]
+    div
+        [ class "stat-card"
+        , Attr.attribute "role" "button"
+        , Attr.tabindex 0
+        , Attr.attribute "data-work-category"
+            (Dict.fromList [ ( "Deals", "deals" ), ( "Open pipeline", "pipeline" ), ( "Leads", "leads" ), ( "Students", "students" ), ( "Applications", "cases" ) ]
+                |> Dict.get label
+                |> Maybe.withDefault ""
+            )
+        , Attr.attribute "aria-label" (label ++ ": " ++ valueText ++ ". Show details")
+        ]
         [ span [ class "stat-card__label" ] [ text label ]
         , span [ class "stat-card__value" ] [ text valueText ]
         , span [ class "stat-card__hint" ] [ text hint ]
@@ -274,25 +284,20 @@ homeView model user =
                 )
             ]
         , Html.node "crm-my-work" [] []
-        , Html.node "crm-ai-productivity" [] []
-        , div [ class "stats" ]
-            [ statCard "Deals"
-                (summaryText model (\report -> String.fromInt (List.sum (Dict.values report.stageCounts))))
-                (summaryText model (\report -> String.fromInt (List.sum (Dict.values report.stageCounts) - (Dict.get "Won" report.stageCounts |> Maybe.withDefault 0) - (Dict.get "Lost" report.stageCounts |> Maybe.withDefault 0)) ++ " active"))
-            , statCard "Open pipeline"
-                (summaryText model .pipelineLabel)
-                "All accessible opportunities"
-            , statCard "Leads"
-                (summaryText model (\report -> String.fromInt report.leads))
-                (summaryText model (\report -> String.fromInt report.newLeads ++ " new"))
-            , statCard "Students"
-                (summaryText model (\report -> String.fromInt report.students))
-                (summaryText model (\report -> String.fromInt report.approvedStudents ++ " approved"))
-            , statCard "Cases"
-                (summaryText model (\report -> String.fromInt report.totalCases))
-                (summaryText model (\report -> String.fromInt report.activeCases ++ " open"))
-            ]
-        , div [ class "chart-row" ]
+        , details [ class "application-controls" ]
+            [ summary [] [ text "Optional AI work brief" ], Html.node "crm-ai-productivity" [] [] ]
+        , if user.role == "admin" || user.role == "manager" then
+            div [] [ Html.node "crm-priority-queues" [ Attr.attribute "queue" "unassigned", Attr.attribute "exceptions-only" "true" ] [], Html.node "crm-operational-attention" [] [] ]
+          else
+            text ""
+        , Html.node "crm-recent-changes" [] []
+        ]
+
+
+managementChartsView : Model -> Html Msg
+managementChartsView model =
+    div []
+        [ div [ class "chart-row" ]
             [ div [ class "chart-card" ]
                 [ h3 [ class "chart-card__title" ] [ text "Pipeline distribution" ]
                 , p [ class "chart-card__subtitle" ]
@@ -322,10 +327,10 @@ homeView model user =
             ]
         , div [ class "chart-card" ]
             [ h3 [ class "chart-card__title" ] [ text "Pipeline value by stage" ]
+            , p [ class "chart-card__subtitle" ] [ text ("Total accessible open pipeline: " ++ summaryText model .pipelineLabel) ]
             , p [ class "chart-card__subtitle" ]
                 [ text "USD deals only · Other currencies are included in Reports" ]
             , barChart (barData model)
             ]
-        , activityHeatmap model.today (allCreatedAt model)
-        , Html.node "crm-recent-changes" [] []
+        , details [] [ summary [] [ text "Record creation activity" ], activityHeatmap model.today (allCreatedAt model) ]
         ]

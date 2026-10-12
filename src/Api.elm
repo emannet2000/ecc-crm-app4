@@ -1430,9 +1430,11 @@ leadDecoder =
         |> andMap (optString "interestedCountry")
         |> andMap (optString "interestedService")
         |> andMap (D.oneOf [ D.field "source" D.string, D.succeed "Website" ])
+        |> andMap (optString "referrer")
         |> andMap (optString "assignedTo")
         |> andMap (D.oneOf [ D.field "status" D.string, D.succeed "New" ])
         |> andMap (optString "followUpDate")
+        |> andMap (optString "nextAction")
         |> andMap (optString "notes")
         |> andMap (optString "createdBy")
         |> andMap (optString "createdAt")
@@ -1584,9 +1586,12 @@ leadFormPayload lf =
         , ( "interestedCountry", E.string lf.interestedCountry )
         , ( "interestedService", E.string lf.interestedService )
         , ( "source", E.string lf.source )
+        , ( "referrer", E.string lf.referrer )
         , ( "assignedTo", E.string lf.assignedTo )
         , ( "status", E.string lf.status )
         , ( "followUpDate", E.string lf.followUpDate )
+        , ( "nextAction", E.string lf.nextAction )
+        , ( "duplicateConfirmed", E.bool lf.duplicateConfirmed )
         , ( "notes", E.string lf.notes )
         ]
 
@@ -2085,7 +2090,37 @@ contactsPageExpect toMsg =
                             Err ("Could not parse contacts: " ++ D.errorToString err)
 
 
-dealsPageExpect : (Result String ( List Deal, Int ) -> msg) -> Http.Expect msg
+boardCurrencyDecoder : D.Decoder BoardCurrency
+boardCurrencyDecoder =
+    D.map5 BoardCurrency (D.field "count" D.int) (D.field "total" D.float) (D.field "open" D.float) (D.field "weighted" D.float) (D.field "won" D.float)
+
+
+boardStageDecoder : D.Decoder BoardStage
+boardStageDecoder =
+    D.map2 BoardStage (D.field "count" D.int) (D.field "values" (D.dict D.float))
+
+
+boardSummaryDecoder : D.Decoder BoardSummary
+boardSummaryDecoder =
+    D.map5 BoardSummary (D.field "count" D.int) (D.field "openCount" D.int) (D.field "wonCount" D.int) (D.field "currencies" (D.dict boardCurrencyDecoder)) (D.field "stages" (D.dict boardStageDecoder))
+
+
+dealsDataDecoder : D.Decoder DealsData
+dealsDataDecoder =
+    D.map7
+        (\items total summary owners snapshot offset limit ->
+            { items = items, query = "", total = total, summary = summary, owners = owners, snapshot = snapshot, offset = offset, limit = limit, loadingMore = False }
+        )
+        (D.field "deals" (D.list dealDecoder))
+        (D.field "total" D.int)
+        (D.field "summary" boardSummaryDecoder)
+        (D.field "owners" (D.list D.string))
+        (D.field "snapshot" D.string)
+        (D.field "offset" D.int)
+        (D.field "limit" D.int)
+
+
+dealsPageExpect : (Result String DealsData -> msg) -> Http.Expect msg
 dealsPageExpect toMsg =
     Http.expectStringResponse toMsg <|
         \response ->
@@ -2110,10 +2145,7 @@ dealsPageExpect toMsg =
                 Http.GoodStatus_ _ body ->
                     case
                         D.decodeString
-                            (D.map2 Tuple.pair
-                                (D.field "deals" (D.list dealDecoder))
-                                (D.oneOf [ D.field "total" D.int, D.succeed 0 ])
-                            )
+                            dealsDataDecoder
                             body
                     of
                         Ok pair ->
@@ -3097,25 +3129,26 @@ deleteActivity token id toMsg =
         }
 
 
-fetchDeals : String -> String -> Int -> Int -> (Result String ( List Deal, Int ) -> msg) -> Cmd msg
-fetchDeals token query limit offset toMsg =
-    let
-        qs =
-            String.join "&"
-                [ "q=" ++ Url.percentEncode query
-                , "limit=" ++ String.fromInt limit
-                , "offset=" ++ String.fromInt offset
-                ]
-    in
+fetchDeals : String -> String -> String -> String -> String -> String -> Int -> Int -> (Result String DealsData -> msg) -> Cmd msg
+fetchDeals token query owner from to snapshot limit offset toMsg =
     Http.request
         { method = "GET"
         , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
-        , url = "/api/deals?" ++ qs
+        , url = "/api/deals?board=page&" ++ String.join "&"
+            [ "q=" ++ Url.percentEncode query
+            , "owner=" ++ Url.percentEncode owner
+            , "from=" ++ Url.percentEncode from
+            , "to=" ++ Url.percentEncode to
+            , "snapshot=" ++ Url.percentEncode snapshot
+            , "limit=" ++ String.fromInt limit
+            , "offset=" ++ String.fromInt offset
+            ]
         , body = Http.emptyBody
         , expect = dealsPageExpect toMsg
         , timeout = Just 20000
         , tracker = Nothing
         }
+
 
 
 createDeal : String -> DealForm -> (Result ApiError Deal -> msg) -> Cmd msg
@@ -3745,17 +3778,17 @@ httpErrorMessage error =
             "Network unavailable. Check your connection and retry."
 
         Http.Timeout ->
-            "The request timed out. Please retry."
+            "The request timed out. Refresh the record to check whether your changes were saved before retrying."
 
         Http.BadStatus status ->
             if status >= 500 then
-                "The server could not complete the request. Please retry."
+                "The server could not complete the request. Refresh the record to check its saved state before retrying."
 
             else if status == 401 then
                 "Your session expired. Please sign in again."
 
-            else if status == 409 then
-                "The record changed or has related records. Reload it and check before retrying."
+            else if status == 409 || status == 412 then
+                "This change needs review. Keep your draft, refresh the record, and compare the latest saved values before trying again. Related records may also prevent this action."
 
             else if status == 403 then
                 "Your role does not have permission for this action."
@@ -3770,3 +3803,29 @@ httpErrorMessage error =
 fetchWorkspaceClock : String -> (Result String ( String, Int ) -> msg) -> Cmd msg
 fetchWorkspaceClock token toMsg =
     workspaceGet token "/api/clock" (D.map2 Tuple.pair (D.field "today" D.string) (D.field "unread" D.int)) toMsg
+
+
+bulkMoveDeals : String -> List String -> String -> (Result ApiError Deal -> msg) -> Cmd msg
+bulkMoveDeals token ids stage toMsg =
+    Http.request
+        { method = "POST"
+        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , url = "/api/deals/bulk"
+        , body = Http.jsonBody (E.object [ ( "ids", E.list E.string ids ), ( "stage", E.string stage ) ])
+        , expect = savedDealExpect toMsg
+        , timeout = Just 20000
+        , tracker = Nothing
+        }
+
+
+bulkDeleteDeals : String -> List String -> (Result String String -> msg) -> Cmd msg
+bulkDeleteDeals token ids toMsg =
+    Http.request
+        { method = "POST"
+        , headers = [ Http.header "Authorization" ("Bearer " ++ token) ]
+        , url = "/api/deals/bulk"
+        , body = Http.jsonBody (E.object [ ( "ids", E.list E.string ids ), ( "delete", E.bool True ) ])
+        , expect = deletedDealExpect toMsg
+        , timeout = Just 20000
+        , tracker = Nothing
+        }

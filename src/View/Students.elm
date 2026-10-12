@@ -560,7 +560,7 @@ studentDetailView model s =
             [ iconBack
             , span [] [ text "Back to students" ]
             ]
-        , a [ Attr.href "#record-tools?tab=workflows", Attr.target "_self", class "ecc-btn ecc-btn--ghost ecc-btn--inline" ] [ text "Application tools & create case" ]
+        , a [ Attr.href "#record-tools?tab=workflows", Attr.target "_self", class "ecc-btn ecc-btn--ghost ecc-btn--inline" ] [ text "Application tools & create application" ]
         , header [ class "detail-hero" ]
             [ node "crm-record-photo"
                 [ class "detail-hero__avatar"
@@ -599,7 +599,7 @@ studentDetailView model s =
             ]
         , node "crm-student-journey" [ Attr.attribute "record-id" s.id ] []
         , div [ class "detail-stats" ]
-            [ detailStat "Cases"
+            [ detailStat "Applications"
                 (String.fromInt (List.length dossierData.cases))
                 "Total"
             , detailStat "Documents"
@@ -642,19 +642,19 @@ studentDetailView model s =
                     )
                 ]
             , div [ class "detail__main" ]
-                [ detailCard "Cases"
+                [ detailCard "Applications"
                     (Just
                         (button
                             [ class "detail-card__action"
                             , type_ "button"
                             , onClick (OpenedAddCaseForStudent s)
                             ]
-                            [ text "New case" ]
+                            [ text "New application" ]
                         )
                     )
                     (case dossierData.status of
                         "loading" ->
-                            div [ class "activity-loading" ] [ text "Loading cases…" ]
+                            div [ class "activity-loading" ] [ text "Loading applications…" ]
 
                         "error" ->
                             div [ class "activity-loading" ]
@@ -664,8 +664,8 @@ studentDetailView model s =
                             if List.isEmpty dossierData.cases then
                                 detailEmpty
                                     iconTasks
-                                    "No cases yet"
-                                    "Open a case to start tracking submissions and visa progress."
+                                    "No applications yet"
+                                    "Open a application to start tracking submissions and visa progress."
 
                             else
                                 div [ class "activity-list" ]
@@ -677,7 +677,7 @@ studentDetailView model s =
                         detailEmpty
                             iconContacts
                             "No documents yet"
-                            "Documents attached to this student's cases will appear here."
+                            "Documents attached to this student's applications will appear here."
 
                      else
                         div [ class "activity-list" ]
@@ -689,7 +689,7 @@ studentDetailView model s =
                         detailEmpty
                             iconDeals
                             "No invoices yet"
-                            "Invoices tied to this student's cases will appear here."
+                            "Invoices tied to this student's applications will appear here."
 
                      else
                         div [ class "activity-list" ]
@@ -942,7 +942,8 @@ studentFormView model sf isEdit =
                 "Save student"
     in
     form [ onSubmit SubmittedStudentForm, Attr.novalidate True ]
-        [ case formError of
+        [ Html.node "crm-draft-recovery" [] []
+        , case formError of
             Just msg ->
                 div [ class "ecc-alert ecc-alert--error" ] [ text msg ]
 
@@ -1027,6 +1028,7 @@ studentFormModal model sf =
         [ div
             [ class "modal modal--wide"
             , Attr.attribute "role" "dialog"
+            , Attr.attribute "data-draft-record-id" (Maybe.withDefault "new" model.editingStudentId)
             , Attr.attribute "aria-modal" "true"
             , Attr.attribute "aria-label" titleText
             , Html.Events.stopPropagationOn "click"

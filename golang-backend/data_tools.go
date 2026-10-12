@@ -84,6 +84,7 @@ func registerDataRoutes(m *http.ServeMux) {
 	m.HandleFunc("GET /api/duplicates", authMiddleware(handleDuplicates))
 	m.HandleFunc("POST /api/contacts/merge", authMiddleware(handleMergeContacts))
 	m.HandleFunc("POST /api/contacts/bulk", authMiddleware(handleBulkContacts))
+	m.HandleFunc("POST /api/deals/bulk", authMiddleware(handleBulkDeals))
 }
 func (state *runtimeStore) handleInvoicePDF(w http.ResponseWriter, r *http.Request) {
 	state.mu.RLock()
@@ -345,9 +346,10 @@ func handleMergeContacts(w http.ResponseWriter, r *http.Request) {
 }
 func (state *runtimeStore) handleBulkContacts(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		IDs    []string
-		Stage  string
-		Delete bool
+		IDs       []string
+		Stage     string
+		Delete    bool
+		Revisions map[string]string
 	}
 	if !decodeRequest(w, r, &req) {
 		return
@@ -358,11 +360,18 @@ func (state *runtimeStore) handleBulkContacts(w http.ResponseWriter, r *http.Req
 	}
 	state.mu.Lock()
 	defer state.mu.Unlock()
+	if req.Stage != "" && req.Stage != "Lead" && req.Stage != "Prospect" && req.Stage != "Client" && req.Stage != "Customer" {
+		writeError(w, 400, "Invalid contact stage")
+		return
+	}
 	selected := map[string]bool{}
 	for _, id := range req.IDs {
 		c, ok := state.findContactByID(id)
 		if !ok || !canWrite(c.RecordScope, currentUser(r)) {
 			writeError(w, 403, "All selected contacts must be editable")
+			return
+		}
+		if !checkBulkRevision(w, id, req.Revisions, recordMap(c)) {
 			return
 		}
 		selected[id] = true
@@ -394,7 +403,7 @@ func (state *runtimeStore) handleBulkContacts(w http.ResponseWriter, r *http.Req
 		out = append(out, c)
 	}
 	state.contacts = out
-	writeJSON(w, 200, map[string]any{"changed": len(req.IDs)})
+	writeJSON(w, 200, map[string]any{"changed": len(selected)})
 }
 
 func handleBulkContacts(w http.ResponseWriter, r *http.Request) {

@@ -56,8 +56,19 @@ func handleApplicationHandoffs(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 404, "Application not found")
 		return
 	}
+	assigned := c.AssignedOfficer
+	if user, found := state.findUserByID(assigned); found && user.OrgID == c.OrgID {
+		assigned = user.Name
+	}
+	ownerName := "Unassigned"
+	if c.OwnerID != "" {
+		ownerName = "Unavailable staff (" + c.OwnerID + ")"
+	}
 	if owner, found := state.findUserByID(c.OwnerID); found && owner.OrgID == c.OrgID {
-		c.AssignedOfficer = owner.Name
+		ownerName = owner.Name
+		if owner.Disabled {
+			ownerName += " (inactive)"
+		}
 	}
 	history, err := handoffHistory(r, c.ID)
 	if err != nil {
@@ -71,7 +82,7 @@ func handleApplicationHandoffs(w http.ResponseWriter, r *http.Request) {
 			recipients = append(recipients, u)
 		}
 	}
-	writeJSON(w, 200, map[string]any{"today": organizationToday(r), "ownerId": c.OwnerID, "owner": c.AssignedOfficer, "nextAction": c.NextAction, "dueDate": c.NextDeadline, "history": history, "recipients": recipients, "canPropose": canWrite(c.RecordScope, currentUser(r)), "userId": currentUser(r).ID})
+	writeJSON(w, 200, map[string]any{"today": organizationToday(r), "ownerId": c.OwnerID, "owner": ownerName, "assignedOfficer": assigned, "nextAction": c.NextAction, "dueDate": c.NextDeadline, "history": history, "recipients": recipients, "canPropose": canWrite(c.RecordScope, currentUser(r)), "userId": currentUser(r).ID})
 }
 func handleProposeHandoff(w http.ResponseWriter, r *http.Request) {
 	state, done := runtimeForCall(r)
@@ -122,7 +133,7 @@ func handleProposeHandoff(w http.ResponseWriter, r *http.Request) {
 	h.ID = newID("handoff")
 	h.CaseID = c.ID
 	h.FromID = c.OwnerID
-	h.FromName = c.AssignedOfficer
+	h.FromName = c.OwnerID
 	if owner, found := state.findUserByID(c.OwnerID); found && owner.OrgID == c.OrgID {
 		h.FromName = owner.Name
 	}
@@ -195,7 +206,7 @@ func handleResolveHandoff(w http.ResponseWriter, r *http.Request) {
 			for i := range state.cases {
 				if state.cases[i].ID == c.ID {
 					state.cases[i].OwnerID = u.ID
-					state.cases[i].AssignedOfficer = u.Name
+					state.cases[i].AssignedOfficer = u.ID
 					state.cases[i].NextAction = h.NextAction
 					state.cases[i].NextDeadline = h.DueDate
 				}

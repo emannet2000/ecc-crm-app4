@@ -24,11 +24,31 @@ in-app **Install ECC CRM** button or the browser menu. On iPhone/iPad, open the 
 in Safari, use **Share**, then **Add to Home Screen**. Installation requires HTTPS
 in production; localhost is supported for development.
 
-The service worker keeps only the public app shell and static files available
-offline. It never caches API responses, uploaded photos, documents or client data.
-The offline notice appears when the browser reports a lost connection. Sign-in,
-record data, uploads and edits still need a connection; offline edits and background
-synchronization are not implemented.
+The service worker keeps the public app shell available offline. To save CRM data,
+sign in online and open **Offline work → Enable offline work** on a device you
+control. Open the views you need while connected: those responses are then stored
+privately for that account on this device. Cached lists can open their record
+details offline. Saved views are snapshots and may be out of date; uncached views
+and searches need a connection. Up to 250 responses are retained.
+
+Offline work supports edits to existing contacts, deals, tasks, schools, students,
+agents, leads, cases and partners, including deal stages, task status and next-action
+plans. Each edit needs the record's cached server revision. The app stores up to
+100 pending drafts in IndexedDB and displays them in **Offline work**. Edits remain
+pending until server validation succeeds. Uploads, new records, deletion, bulk
+changes, payments, administration and live communication need a connection.
+Document files and photos are not cached.
+
+Reconnection triggers sync while the app is open. Browsers with Background Sync
+can also retry queued work; **Sync pending edits** is always available. Sync uses
+the original account, current permissions and each record's original revision.
+Conflicts stay pending for **Compare with saved record**, followed by an explicit
+retry or discard. Invalid or unauthorized edits remain blocked. Signing out,
+changing accounts, or **Disable and clear device data** removes saved responses
+and drafts. Browser storage eviction can remove local data; pending drafts should
+be synchronized before clearing browser data. Offline sign-in to a different
+account is unavailable; the previously enabled account can resume from its cached
+profile.
 
 ## Open it on a phone
 
@@ -50,3 +70,8 @@ scroll locking, and online/offline status. Browser smoke coverage checks 320-, 3
 and 768-pixel viewports, mobile navigation, form sizing and administration access.
 Browser execution requires an environment where Chromium can launch; local DOM
 checks do not verify final visual layout or a physical phone's keyboard behavior.
+
+
+Offline browser verification: `npm run test:offline`. To also exercise the native
+Elm editor against a temporary Go server, build `build/ecc-crm` and run
+`ECC_BROWSER_LIVE=true npm run test:offline`.

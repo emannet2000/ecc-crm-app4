@@ -14,30 +14,57 @@ import Update.Validate exposing (validateDealForm)
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        GotDeals result ->
-            case result of
-                Ok ( items, total ) ->
-                    let
-                        prevQ =
+        RefreshDeals ->
+            loadDeals { model | dealsRequestId = model.dealsRequestId + 1, pendingDealsQuery = Nothing, selectedDeals = Set.empty }
+
+        LoadMoreDeals ->
+            case ( model.token, model.deals ) of
+                ( Just token, Success data ) ->
+                    if data.loadingMore || model.pendingDealsQuery /= Nothing || List.length data.items >= data.total then
+                        ( model, Cmd.none )
+
+                    else
+                        ( { model | deals = Success { data | loadingMore = True } }
+                        , Api.fetchDeals token data.query model.ownerFilter model.dateFromFilter model.dateToFilter data.snapshot data.limit (List.length data.items) (GotDealsAt model.dealsRequestId data.query True)
+                        )
+
+                _ ->
+                    ( model, Cmd.none )
+
+        GotDealsAt requestId query append result ->
+            if requestId /= model.dealsRequestId then
+                ( model, Cmd.none )
+
+            else
+                case result of
+                    Ok data ->
+                        let
+                            items =
+                                case ( append, model.deals ) of
+                                    ( True, Success old ) ->
+                                        old.items ++ data.items
+
+                                    _ ->
+                                        data.items
+                        in
+                        ( { model | deals = Success { data | items = items, query = query, loadingMore = False } }, Cmd.none )
+
+                    Err message ->
+                        if append then
                             case model.deals of
-                                Success d ->
-                                    d.query
+                                Success data ->
+                                    ( { model | deals = Success { data | loadingMore = False }, toast = Just message }, Cmd.none )
 
                                 _ ->
-                                    ""
-                    in
-                    ( { model
-                        | deals =
-                            Success
-                                { items = items
-                                , query = prevQ
-                                , total = total
-                                , offset = 0
-                                , limit = pageSize
-                                }
-                      }
-                    , Cmd.none
-                    )
+                                    ( model, Cmd.none )
+
+                        else
+                            ( { model | deals = Failure message }, Cmd.none )
+
+        GotDeals result ->
+            case result of
+                Ok data ->
+                    ( { model | deals = Success data }, Cmd.none )
 
                 Err message ->
                     ( { model | deals = Failure message }, Cmd.none )
@@ -50,9 +77,9 @@ update msg model =
                             Success { data | query = q, offset = 0 }
 
                         _ ->
-                            Success { items = [], query = q, total = 0, offset = 0, limit = pageSize }
+                            Success (emptyDealsData q)
             in
-            ( { model | deals = nextDeals, pendingDealsQuery = Just q }
+            ( { model | selectedDeals = Set.empty, deals = nextDeals, pendingDealsQuery = Just q, dealsRequestId = model.dealsRequestId + 1 }
             , Cmd.none
             )
 
@@ -60,7 +87,7 @@ update msg model =
             case ( model.token, model.pendingDealsQuery ) of
                 ( Just t, Just q ) ->
                     ( { model | pendingDealsQuery = Nothing }
-                    , Api.fetchDeals t q pageSize 0 GotDeals
+                    , Api.fetchDeals t q model.ownerFilter model.dateFromFilter model.dateToFilter "" 50 0 (GotDealsAt model.dealsRequestId q False)
                     )
 
                 _ ->
@@ -458,22 +485,16 @@ update msg model =
             ( { model | selectedDeals = Set.empty }, Cmd.none )
 
         UpdatedOwnerFilter owner ->
-            ( { model | ownerFilter = owner }, Cmd.none )
+            loadDeals { model | selectedDeals = Set.empty, ownerFilter = owner, dealsRequestId = model.dealsRequestId + 1, pendingDealsQuery = Nothing }
 
         UpdatedDateFromFilter date ->
-            ( { model | dateFromFilter = date }, Cmd.none )
+            loadDeals { model | selectedDeals = Set.empty, dateFromFilter = date, dealsRequestId = model.dealsRequestId + 1, pendingDealsQuery = Nothing }
 
         UpdatedDateToFilter date ->
-            ( { model | dateToFilter = date }, Cmd.none )
+            loadDeals { model | selectedDeals = Set.empty, dateToFilter = date, dealsRequestId = model.dealsRequestId + 1, pendingDealsQuery = Nothing }
 
         ClearedDealFilters ->
-            ( { model
-                | ownerFilter = ""
-                , dateFromFilter = ""
-                , dateToFilter = ""
-              }
-            , Cmd.none
-            )
+            loadDeals { model | selectedDeals = Set.empty, ownerFilter = "", dateFromFilter = "", dateToFilter = "", dealsRequestId = model.dealsRequestId + 1, pendingDealsQuery = Nothing }
 
         RequestedBulkMove stageName ->
             ( { model
@@ -502,19 +523,9 @@ update msg model =
                         let
                             ids =
                                 Set.toList model.selectedDeals
-
-                            cmds =
-                                List.map
-                                    (\dealId ->
-                                        Api.updateDealStageOnly token
-                                            dealId
-                                            stageName
-                                            (GotBulkMoved ids)
-                                    )
-                                    ids
                         in
                         ( { model | bulkMoveStage = Nothing }
-                        , Cmd.batch cmds
+                        , Api.bulkMoveDeals token ids stageName (GotBulkMoved ids)
                         )
 
                 _ ->
@@ -532,16 +543,9 @@ update msg model =
                     let
                         ids =
                             Set.toList model.selectedDeals
-
-                        cmds =
-                            List.map
-                                (\dealId ->
-                                    Api.deleteDealRaw token dealId (GotBulkDeleted ids)
-                                )
-                                ids
                     in
                     ( { model | bulkDeleteConfirm = False }
-                    , Cmd.batch cmds
+                    , Api.bulkDeleteDeals token ids (GotBulkDeleted ids)
                     )
 
                 Nothing ->
@@ -566,7 +570,7 @@ update msg model =
                                    )
 
                         Err _ ->
-                            "Some moves failed"
+                            "Move rejected. Refresh and review the selected deals before retrying."
 
                 freshModel =
                     { model
@@ -596,7 +600,7 @@ update msg model =
                                    )
 
                         Err _ ->
-                            "Some deletes failed"
+                            "Delete rejected. Refresh and review the selected deals before retrying."
 
                 freshModel =
                     { model

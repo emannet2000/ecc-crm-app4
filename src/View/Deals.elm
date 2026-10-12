@@ -8,11 +8,13 @@ import Html exposing (..)
 import Html.Attributes as Attr exposing (class, disabled, placeholder, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Json.Decode as D
+import Json.Encode as E
 import Set
 import Svg
 import Types exposing (..)
+import View.StaffPicker as StaffPicker
 import View.Contacts exposing (contactById, contactList)
-import View.Filters exposing (distinctOwners, isStale, passesFilters)
+import View.Filters exposing (isStale)
 import View.Format exposing (dealAgeClass, dealAgeDays, dealAgeLabel, formatCurrency, formatCurrencyWith)
 import View.Helpers exposing (initials, svgIcon, svgPath)
 import View.Icons exposing (iconCalendar, iconEdit, iconTrash, iconUserTiny)
@@ -219,7 +221,7 @@ dealCard model contacts movingId d =
                     Just
                         (span [ class "deal-card__meta-item" ]
                             [ span [ class "deal-card__meta-icon" ] [ iconUserTiny ]
-                            , text d.owner
+                            , StaffPicker.name d.owner
                             ]
                         )
                 ]
@@ -380,17 +382,7 @@ dealCard model contacts movingId d =
                         ]
         , div [ class "deal-card__footer" ]
             [ div [ class "deal-card__meta" ]
-                ([ span [ class ageClass ]
-                    [ if isStale ageDays then
-                        span [ class "deal-card__stale-dot" ] []
-
-                      else
-                        text ""
-                    , text ageLabel
-                    ]
-                 ]
-                    ++ metaItems
-                )
+                metaItems
             , div [ class "deal-card__move" ]
                 [ button
                     [ class "deal-move-btn"
@@ -427,10 +419,23 @@ dealColumn model contacts movingId stageName deals =
             weightedValue deals
 
         isEmpty =
-            List.isEmpty deals
+            case model.deals of
+                Success data ->
+                    (Dict.get stageName data.summary.stages |> Maybe.map .count |> Maybe.withDefault 0) == 0
+
+                _ ->
+                    List.isEmpty deals
+
+        column =
+            case model.deals of
+                Success data ->
+                    Dict.get stageName data.summary.stages |> Maybe.withDefault { count = 0, values = Dict.empty }
+
+                _ ->
+                    { count = List.length deals, values = Dict.empty }
 
         count =
-            List.length deals
+            column.count
 
         ( displayCurrency, isMixed ) =
             columnDisplayCurrency deals
@@ -532,24 +537,9 @@ dealColumn model contacts movingId stageName deals =
                         "—"
 
                      else
-                        currencyTotals .value deals
+                        column.values |> Dict.toList |> List.map (\( currency, amount ) -> formatCurrencyWith currency amount) |> String.join " · "
                     )
                 ]
-            , if isEmpty then
-                text ""
-
-              else
-                span [ class "pipeline-col__weighted" ]
-                    [ text "weighted "
-                    , strong [] [ text (currencyTotals (\d -> d.value * Maybe.withDefault (stageProbability d.stage) d.probability) deals) ]
-                    ]
-            ]
-        , div [ class "pipeline-col__bar" ]
-            [ div
-                [ class "pipeline-col__bar-fill"
-                , Attr.style "width" barWidth
-                ]
-                []
             ]
         , if isEmpty then
             div [ class "pipeline-col__empty" ]
@@ -616,10 +606,13 @@ dealsView model =
         Success data ->
             let
                 visibleDeals =
-                    List.filter (passesFilters model) data.items
+                    data.items
 
                 count =
-                    List.length visibleDeals
+                    data.total
+
+                openDeals =
+                    List.filter (\d -> d.stage /= "Won" && d.stage /= "Lost") visibleDeals
 
                 totalValue =
                     visibleDeals |> List.map .value |> List.sum
@@ -631,7 +624,7 @@ dealsView model =
                     wonValue visibleDeals
 
                 wonCount =
-                    visibleDeals |> List.filter (\d -> d.stage == "Won") |> List.length
+                    data.summary.wonCount
 
                 avgValue =
                     if count == 0 then
@@ -664,7 +657,7 @@ dealsView model =
                     Set.size model.selectedDeals
 
                 owners =
-                    distinctOwners data.items
+                    data.owners
 
                 hasActiveFilters =
                     not (String.isEmpty model.ownerFilter)
@@ -713,27 +706,20 @@ dealsView model =
                         ]
                         [ text "Add deal" ]
                     ]
-                , div [ class "deals-filters" ]
+                , details
+                    ([ class "deals-filter-panel" ] ++ (if hasActiveFilters then [ Attr.attribute "open" "" ] else []))
+                    [ summary [ class "deals-filter-panel__toggle" ]
+                        [ text (if hasActiveFilters then "Filters · active" else "Filters · staff and closing date") ]
+                    , div [ class "deals-filters" ]
                     [ div [ class "deals-filters__group" ]
                         [ button [ class "ecc-btn ecc-btn--ghost", onClick (UpdatedOwnerFilter "__mine__") ] [ text "My deals" ]
                         , span [ class "deals-filters__label" ] [ text "Owner" ]
-                        , select
+                        , node "crm-staff-filter"
                             [ onInput UpdatedOwnerFilter
-                            , value model.ownerFilter
+                            , Attr.attribute "value" model.ownerFilter
+                            , Attr.attribute "owners" (E.encode 0 (E.list E.string owners))
                             ]
-                            (option [ value "" ]
-                                [ text "All owners" ]
-                                :: option [ value "__mine__" ] [ text "My deals" ]
-                                :: List.map
-                                    (\o ->
-                                        option
-                                            [ value o
-                                            , Attr.selected (model.ownerFilter == o)
-                                            ]
-                                            [ text o ]
-                                    )
-                                    owners
-                            )
+                            []
                         ]
                     , div [ class "deals-filters__group" ]
                         [ span [ class "deals-filters__label" ] [ text "Close from" ]
@@ -783,6 +769,7 @@ dealsView model =
                       else
                         text ""
                     ]
+                    ]
                 , if selectionCount > 0 then
                     div [ class "deals-bulk-bar" ]
                         [ span [ class "deals-bulk-bar__count" ]
@@ -817,14 +804,16 @@ dealsView model =
 
                   else
                     text ""
-                , div [ class summaryClass ]
-                    [ kpiCard "Total pipeline (USD)"
-                        (currencyTotals .value visibleDeals)
+                , details [ class "deals-extra-summary" ]
+                    [ summary [] [ text "Pipeline metrics" ]
+                    , div [ class summaryClass ]
+                    [ kpiCard "Open pipeline"
+                        (boardAmounts .open data.summary.currencies)
                         "deals-summary__kpi--total"
                         [ text
-                            (String.fromInt count
-                                ++ " active deal"
-                                ++ (if count == 1 then
+                            (String.fromInt data.summary.openCount
+                                ++ " open deal"
+                                ++ (if data.summary.openCount == 1 then
                                         ""
 
                                     else
@@ -832,27 +821,26 @@ dealsView model =
                                    )
                             )
                         ]
-                    , kpiCard "Weighted forecast (USD)"
-                        (currencyTotals (\d -> d.value * Maybe.withDefault (stageProbability d.stage) d.probability) visibleDeals)
+                    , kpiCard "Expected value"
+                        (boardAmounts .weighted data.summary.currencies)
                         "deals-summary__kpi--weighted"
                         [ text "Stage-adjusted" ]
-                    , kpiCard "Won (USD)"
-                        (currencyTotals .value (List.filter (\d -> d.stage == "Won") visibleDeals))
+                    , kpiCard "Won value"
+                        (boardAmounts .won data.summary.currencies)
                         "deals-summary__kpi--won"
                         [ text (String.fromInt wonCount ++ " closed") ]
-                    , kpiCard "Average deal (USD)"
-                        (if Tuple.second (columnDisplayCurrency visibleDeals) then
-                            "Multiple currencies"
-
-                         else
-                            formatCurrencyWith (Tuple.first (columnDisplayCurrency visibleDeals)) avgValue
-                        )
+                    ]
+                    , div [ class "deals-summary" ]
+                    [ kpiCard "Average deal value"
+                        (boardAmounts (\currency -> if currency.count == 0 then 0 else currency.total / toFloat currency.count) data.summary.currencies)
                         "deals-summary__kpi--avg"
                         [ text "Per deal" ]
                     , kpiCard "Conversion"
                         (String.fromInt (round conversionRate) ++ "%")
                         "deals-summary__kpi--convert"
                         [ text "Won / total" ]
+                    ]
+
                     ]
                 , if List.isEmpty visibleDeals then
                     div [ class "empty-state" ]
@@ -889,7 +877,22 @@ dealsView model =
                         ]
 
                   else
-                    pipelineBoard model (contactList model) model.movingDealId visibleDeals
+                    div [ class "deals-pipeline" ]
+                        [ div [ class "deals-pipeline__heading" ]
+                            [ h3 [] [ text "Deals by stage" ]
+                            , p [] [ text "Open a deal for details. Drag cards or use the arrows to change stage." ]
+                            ]
+                        , p [ class "deals-page-scope" ]
+                            [ text (String.fromInt (List.length visibleDeals) ++ " of " ++ String.fromInt count ++ " matching deals loaded · metrics cover all matches") ]
+                        , pipelineBoard model (contactList model) model.movingDealId visibleDeals
+                        , div [ class "deals-load-actions" ]
+                            [ if List.length data.items < data.total then
+                                button [ class "ecc-btn ecc-btn--inline", disabled data.loadingMore, onClick LoadMoreDeals ] [ text (if data.loadingMore then "Loading more…" else "Load more deals") ]
+                              else
+                                text "All matching cards loaded"
+                            , button [ class "ecc-btn ecc-btn--ghost ecc-btn--inline", onClick RefreshDeals ] [ text "Refresh board" ]
+                            ]
+                        ]
                 ]
 
 
@@ -912,3 +915,12 @@ currencyTotals amount deals =
         |> Dict.toList
         |> List.map (\( currency, total ) -> formatCurrencyWith currency total)
         |> String.join " · "
+
+
+boardAmounts : (BoardCurrency -> Float) -> Dict.Dict String BoardCurrency -> String
+boardAmounts amount currencies =
+    if Dict.isEmpty currencies then
+        "—"
+
+    else
+        currencies |> Dict.toList |> List.map (\( currency, totals ) -> formatCurrencyWith currency (amount totals)) |> String.join " · "

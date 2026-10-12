@@ -82,6 +82,9 @@ input, select, textarea { font-family: inherit; }
   border-radius: 6px;
 }
 
+html[data-nav-focus="adviser"][data-show-deals="false"] .sidebar [data-nav-label="Deals"]{display:none}
+.optional-tools{margin:10px 12px;font-size:12px}.optional-tools label{display:flex;gap:8px;align-items:center;margin:10px 0}.optional-tools input{width:auto}
+
 button:focus:not(:focus-visible),
 a:focus:not(:focus-visible),
 input:focus:not(:focus-visible),
@@ -2027,6 +2030,48 @@ textarea:focus:not(:focus-visible) {
 
 .deals-summary--loading { opacity: 0.7; }
 
+/* Shared list controls: search on the left, primary action on the right. */
+.page-toolbar { align-items: center; gap: 12px; }
+.page-toolbar__search { min-width: 0; flex: 1; }
+.page-toolbar > .ecc-btn { flex-shrink: 0; }
+.detail-hero__actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.draft-recovery { padding: 12px; margin: 8px 0; border: 1px solid var(--border); border-radius: 8px; }
+.draft-recovery label { display: block; margin-top: 8px; }
+.draft-recovery button { margin: 4px 8px 4px 0; }
+@media (max-width: 600px) {
+ .page-toolbar { flex-wrap: wrap; }
+ .page-toolbar__search { flex-basis: 100%; }
+ .page-toolbar > .ecc-btn { margin-left: auto; }
+}
+
+/* Keep daily deal browsing focused; reveal filters and extra metrics on demand. */
+.deals-filter-panel { border-bottom: 1px solid var(--border); margin-bottom: 18px; }
+.deals-filter-panel__toggle, .deals-extra-summary > summary {
+  cursor: pointer; padding: 12px 0; color: var(--text-muted); font-size: 0.85rem;
+}
+.deals-filter-panel__toggle:focus-visible, .deals-extra-summary > summary:focus-visible {
+  outline: 2px solid var(--gold); outline-offset: 3px;
+}
+.deals-extra-summary { margin: -10px 0 18px; }
+.deals-pipeline__heading h3 { margin: 0 0 6px; font-size: 1rem; }
+.deals-pipeline__heading p, .deals-page-scope { color: var(--text-dim); font-size: 0.8rem; margin: 0 0 12px; }
+.deals-pipeline .deal-card__title { font-size: 1rem; line-height: 1.45; }
+.deals-pipeline .deal-card__value { padding-right: 54px; }
+.deals-pipeline .pipeline-col { background: var(--surface-2); box-shadow: none; }
+.deals-pipeline .deal-card { background: var(--surface); box-shadow: none; }
+.deals-pipeline .pipeline-col::before { display: none; }
+.deals-pipeline .deal-card__contact-avatar { display: none; }
+.deals-pipeline .pipeline-col__totals { margin-bottom: 12px; }
+.deal-card:focus-within .deal-card__menu { opacity: 1; }
+@media (hover: none) {
+  .deal-card__menu { opacity: 1; }
+}
+@media (max-width: 700px) {
+  .deals-pipeline .pipeline-board { grid-auto-flow: row; grid-auto-columns: auto; grid-template-columns: minmax(0, 1fr); overflow-x: visible; }
+  .deals-pipeline .pipeline-col { min-height: 100px; }
+  .deals-summary { grid-template-columns: 1fr; gap: 8px; }
+}
+
 .deals-filters {
   display: flex;
   flex-wrap: wrap;
@@ -3466,3 +3511,6 @@ textarea:focus:not(:focus-visible) {
 .audit-entry { display: flex; flex-direction: column; gap: 6px; padding: 14px 0; border-bottom: 1px solid rgba(184,146,46,.25); overflow-wrap: anywhere; }
 .audit-entry span { font-size: 13px; color: #b5ab92; }
 @media (max-width: 800px) { .topbar { flex-wrap: wrap; gap: 12px; } .global-search { order: 3; flex-basis: 100%; max-width: none; margin: 0; } .global-search__panel { min-width: 0; } .workspace-panel { padding: 16px; } }
+
+.stat-card[data-work-category]{cursor:pointer}
+.stat-card[data-work-category]:focus-visible{outline:3px solid var(--primary,#3266dd);outline-offset:3px}

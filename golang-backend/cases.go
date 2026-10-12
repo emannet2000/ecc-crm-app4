@@ -196,6 +196,11 @@ func (state *runtimeStore) createCaseHandler(w http.ResponseWriter, r *http.Requ
 	state.mu.Lock()
 	defer state.mu.Unlock()
 
+	var valid bool
+	req.AssignedOfficer, valid = normalizeStaffAssignment(w, r, req.AssignedOfficer, "", "assignedOfficer", newRecordScope(r))
+	if !valid {
+		return
+	}
 	if fields := state.validateCase(req); len(fields) > 0 {
 		writeFieldErrors(w, fields)
 		return
@@ -275,6 +280,29 @@ func (state *runtimeStore) updateCaseHandler(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	var valid bool
+	req.AssignedOfficer, valid = normalizeStaffAssignment(w, r, req.AssignedOfficer, state.cases[idx].AssignedOfficer, "assignedOfficer", state.cases[idx].RecordScope)
+	if !valid {
+		return
+	}
+	previousAssignment := strings.TrimSpace(state.cases[idx].AssignedOfficer)
+	if previousAssignment != "" && req.AssignedOfficer != "" && !strings.EqualFold(previousAssignment, "Unassigned") && req.AssignedOfficer != previousAssignment {
+		people, err := requirementPeople(r)
+		if err != nil {
+			writeError(w, 503, "Could not check current responsibility. Your draft has been kept.")
+			return
+		}
+		matches := []string{}
+		for _, person := range people {
+			if person.ID == previousAssignment || strings.EqualFold(person.Name, previousAssignment) {
+				matches = append(matches, person.ID)
+			}
+		}
+		if len(matches) != 1 || matches[0] != req.AssignedOfficer {
+			writeFieldErrors(w, map[string]string{"assignedOfficer": "Use Ownership and handoffs to transfer responsibility. Resolve an old name through Historical staff assignments if it is the same person."})
+			return
+		}
+	}
 	if fields := state.validateCase(req); len(fields) > 0 {
 		writeFieldErrors(w, fields)
 		return

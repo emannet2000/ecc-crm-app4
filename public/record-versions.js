@@ -2,7 +2,9 @@
 // Elm's HTTP requests use XHR. Capture record versions and freeze them while a
 // modal is open so a background refresh cannot authorize a stale form save.
 (function () {
-  const revisions = new Map(); let frozen = null;
+  const revisions = new Map(); let frozen = null, recovered = null;
+  window.crmDraftRevisions = () => Object.fromEntries(frozen || revisions);
+  window.addEventListener('crm:restore-draft-versions',event=>{recovered=new Map(Object.entries(event.detail||{}))});
   function observe(value) {
     if (!value || typeof value !== 'object') return;
     if (value.id && value._revision) revisions.set(value.id, value._revision);
@@ -16,10 +18,18 @@
   XMLHttpRequest.prototype.send = function(body) {
     if (this.crmURL?.origin === location.origin && this.crmURL.pathname.startsWith('/api/')) {
       const match = this.crmURL.pathname.match(/^\/api\/(contacts|deals|tasks|schools|students|agents|leads|cases|documents|invoices|payments|partners|activities)\/([^/]+)(?:\/|$)/);
+      if (this.crmMethod === 'POST' && /^\/api\/(contacts|deals)\/bulk$/.test(this.crmURL.pathname)) {
+        try {
+          const input = JSON.parse(body);
+          input.revisions = Object.fromEntries((input.ids || []).map(id => [id, (recovered || frozen || revisions).get(id) || '']));
+          body = JSON.stringify(input);
+        } catch {}
+      }
       if (match && ['PUT','PATCH','DELETE'].includes(this.crmMethod)) {
-        const revision = (frozen || revisions).get(decodeURIComponent(match[2]));
+        const revision = (recovered || frozen || revisions).get(decodeURIComponent(match[2]));
         if (revision) this.setRequestHeader('If-Match', revision);
       }
+      if(['POST','PUT','PATCH','DELETE'].includes(this.crmMethod)&&/^\/api\/(contacts|deals|tasks|schools|students|agents|leads|cases|documents|invoices|payments|partners|activities)(?:\/|$)/.test(this.crmURL.pathname))window.dispatchEvent(new CustomEvent('crm:save-start',{detail:{path:this.crmURL.pathname}}));
       // Capture before the application's load callback can open an edit dialog.
       this.addEventListener('readystatechange', () => {
         if (this.readyState === 4 && this.status >= 200 && this.status < 300) {
@@ -29,13 +39,16 @@
           }
         }
       });
+      if(['POST','PUT','PATCH','DELETE'].includes(this.crmMethod))this.addEventListener('loadend',()=>{
+        window.dispatchEvent(new CustomEvent('crm:save-result',{detail:{path:this.crmURL.pathname,status:this.status}}));
+      });
     }
     return originalSend.call(this, body);
   };
   const refresh = () => {
     const modal = document.querySelector('[role=dialog], .modal, .ecc-modal, .modal-panel');
     if (modal && !frozen) frozen = new Map(revisions);
-    if (!modal) frozen = null;
+    if (!modal) { frozen = null; recovered = null; }
   };
   new MutationObserver(refresh).observe(document.body, {childList:true, subtree:true});
 })();

@@ -8,6 +8,7 @@ import (
 )
 
 type documentRequest struct {
+	LeadID               string `json:"leadId"`
 	CaseID               string `json:"caseId"`
 	DocName              string `json:"docName"`
 	Required             bool   `json:"required"`
@@ -51,10 +52,24 @@ func (state *runtimeStore) validateDocument(req documentRequest) map[string]stri
 	docName := strings.TrimSpace(req.DocName)
 	status := strings.TrimSpace(req.Status)
 
-	if caseID == "" {
-		fields["caseId"] = "Case is required"
-	} else if _, ok := state.findCaseByID(caseID); !ok {
-		fields["caseId"] = "Case not found"
+	leadID := strings.TrimSpace(req.LeadID)
+	if (caseID == "") == (leadID == "") {
+		fields["caseId"] = "Choose either an application or a lead"
+	} else if caseID != "" {
+		if _, ok := state.findCaseByID(caseID); !ok {
+			fields["caseId"] = "Case not found"
+		}
+	} else {
+		found := false
+		for _, lead := range state.leads {
+			if lead.ID == leadID {
+				found = true
+				break
+			}
+		}
+		if !found {
+			fields["leadId"] = "Lead not found"
+		}
 	}
 
 	if docName == "" {
@@ -170,6 +185,7 @@ func (state *runtimeStore) createDocumentHandler(w http.ResponseWriter, r *http.
 		RecordScope:          newRecordScope(r),
 		ID:                   newID("doc"),
 		CaseID:               caseID,
+		LeadID:               strings.TrimSpace(req.LeadID),
 		CaseNumber:           caseNumber,
 		DocName:              strings.TrimSpace(req.DocName),
 		Required:             req.Required,
@@ -236,6 +252,7 @@ func (state *runtimeStore) updateDocumentHandler(w http.ResponseWriter, r *http.
 
 	updated := state.documents[idx]
 	updated.CaseID = caseID
+	updated.LeadID = strings.TrimSpace(req.LeadID)
 	updated.CaseNumber = caseNumber
 	updated.DocName = strings.TrimSpace(req.DocName)
 	updated.Required = req.Required

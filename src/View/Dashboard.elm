@@ -148,7 +148,7 @@ urgentCaseAlert c =
     , icon = "!"
     , headline = c.caseNumber
     , body = c.serviceCategory ++ " marked urgent"
-    , meta = "Case · " ++ c.destinationCountry
+    , meta = "Application · " ++ c.destinationCountry
     , action = OpenedCaseDetail c
     }
 
@@ -267,7 +267,7 @@ caseEntry : Case -> ActivityEntry
 caseEntry c =
     { createdAt = c.createdAt
     , view =
-        activityRow "Case"
+        activityRow "Application"
             (OpenedCaseDetail c)
             (c.destinationCountry ++ " · " ++ c.currentStage)
             (String.left 10 c.createdAt)

@@ -27,7 +27,7 @@ update msg model =
                     ( model, Nav.load href )
 
         UrlChanged url ->
-            update (NavigatedTo (parseRoute url)) model
+            update (NavigatedTo (parseRoute url)) { model | workspaceQuery = Maybe.withDefault "" url.query }
 
         NavigatedTo route ->
             let
@@ -162,6 +162,7 @@ update msg model =
                 clearedModel =
                     { model
                         | route = route
+                        , dealsRequestId = model.dealsRequestId + 1
                         , sidebarOpen = False
                         , contactForm = Nothing
                         , deletingContact = Nothing

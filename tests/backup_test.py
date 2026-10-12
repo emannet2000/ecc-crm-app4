@@ -5,6 +5,10 @@ import sqlite3
 import tarfile
 import tempfile
 import unittest
+import subprocess
+import sys
+import hashlib
+import json
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -17,6 +21,34 @@ def module(name):
 
 
 class BackupTest(unittest.TestCase):
+    def test_restore_verification_checks_document_bytes_and_reports_corruption(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            directory = Path(temporary)
+            data = directory / 'original'
+            data.mkdir()
+            file = data / 'uploads' / 'org' / 'doc' / 'original.txt'
+            file.parent.mkdir(parents=True)
+            file.write_bytes(b'Original document')
+            database = data / 'crm.sqlite3'
+            with sqlite3.connect(database) as connection:
+                connection.execute('CREATE TABLE file_versions(id TEXT,org_id TEXT,document_id TEXT,storage_path TEXT,sha256 TEXT)')
+                connection.execute('INSERT INTO file_versions VALUES(?,?,?,?,?)', ('version', 'org', 'doc', str(file), hashlib.sha256(file.read_bytes()).hexdigest()))
+            archive = directory / 'verified.tar.gz'
+            # Exercise the actual backup CLI, which verifies before declaring success.
+            result = subprocess.run([sys.executable, str(ROOT / 'scripts/backup.py'), str(database), str(archive)], capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            status = json.loads((data / 'backup-status.json').read_text())
+            self.assertEqual(status['restoreVerification']['state'], 'verified')
+            self.assertEqual(status['restoreVerification']['documentFiles'], 1)
+            self.assertEqual(status['restoreVerification']['tables']['file_versions'], 1)
+            file.write_bytes(b'Corrupted document')
+            broken = directory / 'broken.tar.gz'
+            module('backup').backup(database, broken)
+            result = subprocess.run([sys.executable, str(ROOT / 'scripts/verify_backup.py'), str(broken)], capture_output=True, text=True)
+            self.assertNotEqual(result.returncode, 0)
+            self.assertIn('checksum', result.stdout)
+            self.assertEqual(file.read_bytes(), b'Corrupted document')
+
     def test_roundtrip_preserves_wal_uploads_secret_and_relocates_files(self):
         with tempfile.TemporaryDirectory() as temporary:
             directory = Path(temporary)
@@ -31,6 +63,10 @@ class BackupTest(unittest.TestCase):
             connection.execute('PRAGMA journal_mode=WAL')
             connection.execute('CREATE TABLE file_versions(id TEXT,org_id TEXT,document_id TEXT,storage_path TEXT)')
             connection.execute('INSERT INTO file_versions VALUES(?,?,?,?)', ('version', 'org', 'document', str(file)))
+            queued = file.parent / 'queued-file'
+            queued.write_text('Pending cleanup')
+            connection.execute('CREATE TABLE file_gc(path TEXT PRIMARY KEY)')
+            connection.execute('INSERT INTO file_gc VALUES(?)', (str(queued),))
             connection.commit()
             archive = directory / 'backup.tar.gz'
             module('backup').backup(database, archive)
@@ -42,6 +78,10 @@ class BackupTest(unittest.TestCase):
             with sqlite3.connect(restored / 'crm.sqlite3') as db:
                 new = Path(db.execute('SELECT storage_path FROM file_versions').fetchone()[0])
             self.assertEqual(new.read_text(), 'Confidential document')
+            with sqlite3.connect(restored / 'crm.sqlite3') as db:
+                cleanup = Path(db.execute('SELECT path FROM file_gc').fetchone()[0])
+            self.assertEqual(cleanup.read_text(), 'Pending cleanup')
+            self.assertTrue(cleanup.is_relative_to(restored))
             self.assertTrue(new.is_relative_to(restored))
             self.assertEqual(new.stat().st_mode & 0o777, 0o600)
             with self.assertRaises(ValueError):

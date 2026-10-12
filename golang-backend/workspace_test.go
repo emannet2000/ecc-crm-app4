@@ -100,6 +100,7 @@ func authorizedRequest(t *testing.T, handler http.Handler, method, path, body st
 
 func workspaceMux() http.Handler {
 	mux := http.NewServeMux()
+	registerConsolidatedRoutes(mux)
 	mux.HandleFunc("GET /api/search", authMiddleware(handleSearch))
 	mux.HandleFunc("GET /api/audit", authMiddleware(handleAudit))
 	mux.HandleFunc("GET /api/exports/{entity}", authMiddleware(handleExport))
@@ -225,7 +226,7 @@ func TestDatabaseTransactionFailureRollsBackHistory(t *testing.T) {
 func TestWorkspaceEndpointsRequireAuthentication(t *testing.T) {
 	setupStore(t)
 	handler := workspaceMux()
-	for _, path := range []string{"/api/search?q=Ada", "/api/audit", "/api/exports/contacts"} {
+	for _, path := range []string{"/api/search?q=Ada", "/api/audit", "/api/exports/contacts", "/api/communication", "/api/workspace-calendar?from=2026-11-01&to=2026-11-30", "/api/referral-directory"} {
 		response := httptest.NewRecorder()
 		handler.ServeHTTP(response, httptest.NewRequest("GET", path, nil))
 		if response.Code != 401 {

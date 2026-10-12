@@ -46,6 +46,8 @@ type Contact struct {
 }
 
 type Deal struct {
+	NextAction   string        `json:"nextAction"`
+	NextDeadline string        `json:"nextDeadline"`
 	Currency     string        `json:"currency"`
 	Probability  *float64      `json:"probability"`
 	LineItems    []LineItem    `json:"lineItems"`
@@ -108,6 +110,8 @@ type School struct {
 }
 
 type Student struct {
+	NextAction       string          `json:"nextAction"`
+	NextDeadline     string          `json:"nextDeadline"`
 	Intake           string          `json:"intake"`
 	TestType         string          `json:"testType"`
 	TestScore        float64         `json:"testScore"`
@@ -149,6 +153,12 @@ type Agent struct {
 }
 
 type Lead struct {
+	NextAction         string  `json:"nextAction"`
+	CreatedAtTime      string  `json:"createdAtTime,omitempty"`
+	FirstFollowUpAt    string  `json:"firstFollowUpAt,omitempty"`
+	Referrer           string  `json:"referrer"`
+	ConvertedCaseID    string  `json:"convertedCaseId"`
+	ConvertedStudentID string  `json:"convertedStudentId"`
 	ConvertedContactID string  `json:"convertedContactId"`
 	Score              int     `json:"score"`
 	SourceCost         float64 `json:"sourceCost"`
@@ -205,6 +215,13 @@ type Case struct {
 }
 
 type Document struct {
+	ReviewedByID    string `json:"reviewedById,omitempty"`
+	ReviewedBy      string `json:"reviewedBy,omitempty"`
+	ReviewedAt      string `json:"reviewedAt,omitempty"`
+	ReviewedVersion int    `json:"reviewedVersion,omitempty"`
+	ResponsibleID   string `json:"responsibleId,omitempty"`
+	DueDate         string `json:"dueDate,omitempty"`
+	LeadID          string `json:"leadId,omitempty"`
 	RecordScope
 	ID                   string `json:"id"`
 	CaseID               string `json:"caseId"`

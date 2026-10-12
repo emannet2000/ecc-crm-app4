@@ -43,7 +43,12 @@ passesFilters model d =
                 True
 
             else if model.ownerFilter == "__mine__" then
-                Just d.ownerId == Maybe.map .id model.user
+                case model.user of
+                    Just user ->
+                        d.owner == user.id || d.owner == user.name || ((String.isEmpty d.owner || String.toLower (String.trim d.owner) == "unassigned") && d.ownerId == user.id)
+
+                    Nothing ->
+                        False
 
             else
                 d.owner == model.ownerFilter

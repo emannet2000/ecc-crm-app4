@@ -206,6 +206,7 @@ update msg model =
                 , editingTaskId = Nothing
                 , deletingTask = Nothing
                 , pendingContactsQuery = Nothing
+                , dealsRequestId = model.dealsRequestId + 1
                 , pendingDealsQuery = Nothing
                 , pendingTasksQuery = Nothing
                 , profileForm = emptyProfileForm

@@ -46,19 +46,64 @@ func (state *runtimeStore) handleConversations(w http.ResponseWriter, r *http.Re
 		return
 	}
 	limit, offset := parseLimitOffset(r, 25, 0)
-	rows, err := queryObjects(r, "SELECT id,channel,direction,subject,body,status,case_id AS caseId,created_at AS createdAt FROM conversations WHERE org_id=? AND contact_id=? ORDER BY created_at DESC LIMIT ? OFFSET ?", currentUser(r).OrgID, r.PathValue("id"), limit, offset)
-	if err != nil {
-		writeError(w, 500, "Could not load conversation")
+	s := state.snapshot()
+	caseIDs, invoiceIDs := []string{}, []string{}
+	for _, c := range s.Cases {
+		caseIDs = append(caseIDs, c.ID)
+	}
+	for _, inv := range s.Invoices {
+		invoiceIDs = append(invoiceIDs, inv.ID)
+	}
+	allowed := func(field string, ids []string, args *[]any) string {
+		if len(ids) == 0 {
+			return field + "=''"
+		}
+		marks := make([]string, len(ids))
+		for i, id := range ids {
+			marks[i] = "?"
+			*args = append(*args, id)
+		}
+		return "(" + field + "='' OR " + field + " IN (" + strings.Join(marks, ",") + "))"
+	}
+	u := currentUser(r)
+	args := []any{u.OrgID, r.PathValue("id")}
+	conversationAccess := allowed("case_id", caseIDs, &args)
+	query := "SELECT id,channel,direction,subject,body,status,case_id AS caseId,'' AS invoiceId,'conversation' AS source,'' AS lastError,created_at AS createdAt FROM conversations WHERE org_id=? AND contact_id=? AND " + conversationAccess
+	args = append(args, u.OrgID, r.PathValue("id"), u.ID, u.Role)
+	mailAccess := allowed("invoice_id", invoiceIDs, &args)
+	query += " UNION ALL SELECT 'mail:'||id,'email','outbound',subject,body,status,'' AS caseId,invoice_id AS invoiceId,'mail' AS source,last_error AS lastError,created_at AS createdAt FROM mail_outbox WHERE org_id=? AND contact_id=? AND (user_id=? OR ? IN ('admin','manager')) AND kind NOT IN ('password_reset','invite') AND " + mailAccess
+	var total int
+	if err := storeDB(r).QueryRow("SELECT count(*) FROM ("+query+")", args...).Scan(&total); err != nil {
+		writeError(w, 503, "Could not count communication history")
 		return
 	}
-	safe := []map[string]any{}
-	for _, m := range rows {
-		caseID := fmtString(m["caseId"])
-		if caseID == "" || visibleRecordID(state.snapshot(), caseID) {
-			safe = append(safe, m)
-		}
+	pageArgs := append(append([]any{}, args...), limit, offset)
+	rows, err := queryObjects(r, query+" ORDER BY createdAt DESC,id DESC LIMIT ? OFFSET ?", pageArgs...)
+	if err != nil {
+		writeError(w, 500, "Could not load communication history")
+		return
 	}
-	writeJSON(w, 200, map[string]any{"messages": safe})
+	contact, _ := state.conversationContact(r, r.PathValue("id"))
+	for _, row := range rows {
+		row["linkedRecord"] = contact.Name
+		row["recordRoute"] = "/contacts/" + contact.ID
+		for _, c := range s.Cases {
+			if c.ID == fmtString(row["caseId"]) {
+				row["linkedRecord"] = c.CaseNumber
+				row["recordRoute"] = "/cases/" + c.ID
+				break
+			}
+		}
+		for _, inv := range s.Invoices {
+			if inv.ID == fmtString(row["invoiceId"]) {
+				row["linkedRecord"] = inv.InvoiceNumber
+				row["recordRoute"] = "/invoices/" + inv.ID
+				break
+			}
+		}
+		row["deliveryExplanation"] = deliveryExplanation(fmtString(row["channel"]), fmtString(row["status"]))
+	}
+	writeJSON(w, 200, map[string]any{"messages": rows, "total": total, "limit": limit, "offset": offset})
 }
 
 func handleConversations(w http.ResponseWriter, r *http.Request) {
@@ -332,6 +377,10 @@ func handleWhatsAppWebhook(w http.ResponseWriter, r *http.Request) {
 	state.handleWhatsAppWebhook(w, r)
 }
 func (state *runtimeStore) handleWhatsAppSend(w http.ResponseWriter, r *http.Request) {
+	if !contactAllowed(r, r.PathValue("id")) {
+		writeError(w, 409, "Client has a do-not-contact restriction")
+		return
+	}
 	c, ok := state.conversationContact(r, r.PathValue("id"))
 	if !ok {
 		writeError(w, 404, "Contact not found")
@@ -446,4 +495,34 @@ func subjectCaseReference(subject, reference string) bool {
 		}
 	}
 	return false
+}
+
+func deliveryExplanation(channel, status string) string {
+	switch status {
+	case "sent":
+		if channel == "email" {
+			return "Accepted by SMTP; inbox delivery is not confirmed"
+		}
+		return "Sent; await provider delivery confirmation"
+	case "accepted":
+		return "Accepted by provider; delivery is not confirmed"
+	case "delivery_unknown", "uncertain":
+		return "Delivery uncertain — check provider evidence before retrying"
+	case "sending":
+		return "Sending — check status before retrying"
+	case "failed":
+		return "Delivery failed — review the error before retrying"
+	case "waiting_configuration":
+		return "Waiting for email configuration"
+	case "queued":
+		return "Queued for delivery"
+	case "delivered":
+		return "Provider confirmed delivery"
+	case "read":
+		return "Provider confirmed read"
+	case "received":
+		return "Incoming message received"
+	default:
+		return status
+	}
 }

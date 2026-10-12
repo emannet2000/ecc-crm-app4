@@ -434,6 +434,10 @@ func listPaymentsHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (state *runtimeStore) createPaymentHandler(w http.ResponseWriter, r *http.Request) {
+	if !financeCapability(r, "recordPayments") {
+		writeError(w, 403, "Recording payments permission is required")
+		return
+	}
 	var req paymentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid request body")
@@ -540,6 +544,10 @@ func createPaymentHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (state *runtimeStore) deletePaymentHandler(w http.ResponseWriter, r *http.Request) {
+	if !financeCapability(r, "approveAdjustments") {
+		writeError(w, 403, "Finance adjustment permission is required")
+		return
+	}
 	id := r.PathValue("id")
 
 	state.mu.Lock()

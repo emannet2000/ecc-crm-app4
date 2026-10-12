@@ -316,3 +316,13 @@ html[data-nav-focus=finance] .app-shell .mobile-nav .nav-item[data-nav-label=Inv
 html[data-nav-focus=finance] .app-shell .mobile-nav .nav-item[data-nav-label=Students],html[data-nav-focus=finance] .app-shell .mobile-nav .nav-item[data-nav-label=Applications]{display:none}
 
 .receipt-choice{display:flex;gap:12px;align-items:flex-start;margin:14px 0;font-size:14px}.receipt-choice input{flex:none;min-width:24px;min-height:24px}.receipt-choice:focus-within{outline:2px solid var(--primary,#916113);outline-offset:4px}
+
+/* Keep the selected work focus concise; complete module access remains below. */
+.sidebar[data-focus="adviser"] .nav-preset:not(.nav-preset--adviser),
+.sidebar[data-focus="finance"] .nav-preset:not(.nav-preset--finance),
+.sidebar[data-focus="management"] .nav-preset:not(.nav-preset--management) { display: none; }
+.navigation-focus { display: grid; gap: 6px; margin: 12px 14px; color: var(--text-muted); font-size: 12px; }
+.navigation-focus select { width: 100%; min-height: 44px; padding: 8px; border: 1px solid var(--border); border-radius: 8px; background: var(--surface); color: var(--text); }
+.navigation-more > summary { cursor: pointer; min-height: 44px; padding: 12px 14px; color: var(--text-muted); font-size: 13px; }
+.sidebar .optional-tools { color: var(--text-muted); }
+.sidebar .optional-tools summary { cursor: pointer; padding: 8px 0; }

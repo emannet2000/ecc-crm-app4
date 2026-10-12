@@ -31,6 +31,7 @@ const requestUserKey contextKey = "user"
 const requestMetaKey contextKey = "requestMeta"
 
 type requestMeta struct {
+	GateOverrides      map[string]string
 	OwnershipTransfers map[string]bool
 	SAMLRedirect       string
 	Actor              string
@@ -146,7 +147,7 @@ func projectedStore(saved diskStore, user User) diskStore {
 	}
 	ds := []Document{}
 	for _, d := range saved.Documents {
-		if allowed[d.CaseID] {
+		if (d.CaseID != "" && allowed[d.CaseID]) || (d.CaseID == "" && d.LeadID != "" && allowed[d.LeadID]) {
 			ds = append(ds, d)
 		}
 	}
@@ -338,6 +339,17 @@ func scopedHandler(next http.HandlerFunc, w http.ResponseWriter, r *http.Request
 		state.hiddenLedgerPayments = nil
 		state.mu.Unlock()
 		state.applyComputedData()
+		final := state.snapshot()
+		if err := enforceApplicationGates(r, original, &final); err != nil {
+			state.restoreStore(original)
+			if _, blocked := err.(gateDenied); blocked {
+				writeError(w, 409, err.Error())
+			} else {
+				writeError(w, 500, "Could not validate application stage requirements")
+			}
+			return
+		}
+		state.restoreStore(final)
 	} else {
 		state.restoreStore(original)
 	}
@@ -523,7 +535,7 @@ func danglingDeletedRelations(before, after diskStore) bool {
 		for _, payload := range items {
 			var values map[string]any
 			json.Unmarshal([]byte(payload), &values)
-			for _, key := range []string{"contactId", "clientId", "caseId", "invoiceId", "schoolId", "agentId", "partnerId", "parentCaseId", "studentId", "dealId"} {
+			for _, key := range []string{"contactId", "clientId", "caseId", "invoiceId", "schoolId", "agentId", "partnerId", "parentCaseId", "studentId", "dealId", "leadId", "convertedContactId", "convertedCaseId", "convertedStudentId"} {
 				id, _ := values[key].(string)
 				if deleted[id] {
 					return true

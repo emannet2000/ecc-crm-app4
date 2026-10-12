@@ -164,13 +164,40 @@ type alias Deal =
     }
 
 
+type alias BoardCurrency =
+    { count : Int, total : Float, open : Float, weighted : Float, won : Float }
+
+
+type alias BoardStage =
+    { count : Int, values : Dict String Float }
+
+
+type alias BoardSummary =
+    { count : Int, openCount : Int, wonCount : Int, currencies : Dict String BoardCurrency, stages : Dict String BoardStage }
+
+
+emptyBoardSummary : BoardSummary
+emptyBoardSummary =
+    { count = 0, openCount = 0, wonCount = 0, currencies = Dict.empty, stages = Dict.empty }
+
+
 type alias DealsData =
     { items : List Deal
     , query : String
     , total : Int
     , offset : Int
     , limit : Int
+    , summary : BoardSummary
+    , owners : List String
+    , snapshot : String
+    , loadingMore : Bool
     }
+
+
+emptyDealsData : String -> DealsData
+emptyDealsData query =
+    { items = [], query = query, total = 0, offset = 0, limit = 50, summary = emptyBoardSummary, owners = [], snapshot = "", loadingMore = False }
+
 
 
 type alias DealForm =
@@ -705,9 +732,11 @@ type alias Lead =
     , interestedCountry : String
     , interestedService : String
     , source : String
+    , referrer : String
     , assignedTo : String
     , status : String
     , followUpDate : String
+    , nextAction : String
     , notes : String
     , createdBy : String
     , createdAt : String
@@ -733,10 +762,13 @@ type alias LeadForm =
     , interestedCountry : String
     , interestedService : String
     , source : String
+    , referrer : String
     , assignedTo : String
     , status : String
     , followUpDate : String
+    , nextAction : String
     , notes : String
+    , duplicateConfirmed : Bool
     , errors : List ( String, String )
     , submitting : Bool
     , dirty : Bool
@@ -755,10 +787,13 @@ emptyLeadForm =
     , interestedCountry = ""
     , interestedService = ""
     , source = "Website"
+    , referrer = ""
     , assignedTo = ""
     , status = "New"
     , followUpDate = ""
+    , nextAction = "Review inquiry and arrange first consultation"
     , notes = ""
+    , duplicateConfirmed = False
     , errors = []
     , submitting = False
     , dirty = False
@@ -777,10 +812,13 @@ leadToForm l =
     , interestedCountry = l.interestedCountry
     , interestedService = l.interestedService
     , source = l.source
+    , referrer = l.referrer
     , assignedTo = l.assignedTo
     , status = l.status
     , followUpDate = l.followUpDate
+    , nextAction = if String.isEmpty l.nextAction then "Review inquiry and arrange first consultation" else l.nextAction
     , notes = l.notes
+    , duplicateConfirmed = False
     , errors = []
     , submitting = False
     , dirty = False
@@ -1458,6 +1496,7 @@ type alias Model =
     , showPassword : Bool
     , bootstrapping : Bool
     , route : Route
+    , workspaceQuery : String
     , contacts : RemoteData ContactsData
     , viewingContact : Maybe Contact
     , contactForm : Maybe ContactForm
@@ -1489,6 +1528,7 @@ type alias Model =
     , editingTaskId : Maybe String
     , deletingTask : Maybe Task
     , pendingContactsQuery : Maybe String
+    , dealsRequestId : Int
     , pendingDealsQuery : Maybe String
     , pendingTasksQuery : Maybe String
     , profileForm : ProfileForm
@@ -1608,7 +1648,10 @@ type Msg
     | CancelledDeleteContact
     | ConfirmedDeleteContact
     | GotDeletedContact (Result String String)
-    | GotDeals (Result String ( List Deal, Int ))
+    | GotDeals (Result String DealsData)
+    | GotDealsAt Int String Bool (Result String DealsData)
+    | LoadMoreDeals
+    | RefreshDeals
     | OpenedAddDeal
     | OpenedAddDealForContact Contact
     | OpenedAddDealWithStage String

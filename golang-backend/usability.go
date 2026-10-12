@@ -38,7 +38,7 @@ func handleUsabilityFeedback(w http.ResponseWriter, r *http.Request) {
 		writeError(w, 400, "Invalid observation")
 		return
 	}
-	validTasks := map[string]string{"daily-priority": "adviser", "student-review": "adviser", "application-handoff": "adviser", "invoice-receipt": "finance", "recovery-mobile": "either"}
+	validTasks := map[string]string{"daily-priority": "adviser", "student-review": "adviser", "application-handoff": "adviser", "invoice-receipt": "finance", "recovery-mobile": "either", "lead-intake": "adviser", "document-review": "either", "lead-conversion": "adviser"}
 	role, ok := validTasks[in.Task]
 	if !ok || (in.Role != "adviser" && in.Role != "finance") || (role != "either" && role != in.Role) || in.Seconds < 0 || in.Seconds > 86400 || in.Errors < 0 || in.Errors > 1000 {
 		writeError(w, 400, "Choose a matching task and role, with valid time and error counts")

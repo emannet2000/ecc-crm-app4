@@ -164,7 +164,8 @@ activityFormView af =
                 "Log activity"
     in
     form [ onSubmit SubmittedActivityForm, Attr.novalidate True ]
-        [ case formError of
+        [ Html.node "crm-draft-recovery" [ Attr.attribute "record-id" "new" ] []
+        , case formError of
             Just msg ->
                 div [ class "ecc-alert ecc-alert--error" ] [ text msg ]
 

@@ -88,3 +88,13 @@ html.crm-scroll-locked,html.crm-scroll-locked body{overflow:hidden;overscroll-be
   .app-shell .topbar{position:relative}
 }
 @media(prefers-reduced-motion:reduce){.mobile-nav *{transition:none!important}}
+
+#offline-work { position: fixed; bottom: 12px; right: 16px; z-index: 110; max-width: min(520px, calc(100vw - 24px)); background: var(--surface, #fff); color: var(--text, #182131); border: 1px solid #8b97a7; border-radius: 10px; box-shadow: 0 4px 18px #0002; }
+#offline-work > summary { padding: 10px 14px; cursor: pointer; }
+#offline-work > section { padding: 14px; max-height: 65vh; overflow: auto; }
+#offline-work button { margin: 6px 8px 6px 0; min-height: 40px; padding: 8px 12px; cursor: pointer; }
+#offline-work pre { max-height: 200px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 12px; }
+#offline-work .offline-job { border-top: 1px solid #8b97a7; margin-top: 12px; padding-top: 10px; }
+@media (max-width: 900px) { #offline-work { bottom: calc(76px + env(safe-area-inset-bottom)); right: 12px; } }
+#offline-work[data-theme=dark] { background: #182130; color: #e8edf5; color-scheme: dark; }
+#offline-work button { color: inherit; }

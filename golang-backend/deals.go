@@ -155,6 +155,11 @@ func (state *runtimeStore) createDeal(w http.ResponseWriter, r *http.Request) {
 	state.mu.Lock()
 	defer state.mu.Unlock()
 
+	var valid bool
+	req.Owner, valid = normalizeStaffAssignment(w, r, req.Owner, "", "owner", newRecordScope(r))
+	if !valid {
+		return
+	}
 	if fields := state.validateDeal(req); len(fields) > 0 {
 		writeFieldErrors(w, fields)
 		return
@@ -223,6 +228,11 @@ func (state *runtimeStore) updateDeal(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var valid bool
+	req.Owner, valid = normalizeStaffAssignment(w, r, req.Owner, state.deals[idx].Owner, "owner", state.deals[idx].RecordScope)
+	if !valid {
+		return
+	}
 	if fields := state.validateDeal(req); len(fields) > 0 {
 		writeFieldErrors(w, fields)
 		return

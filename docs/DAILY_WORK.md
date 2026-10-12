@@ -32,7 +32,8 @@ invoice/payment. Refresh journey reloads committed data.
 
 Administrators and managers initially see Management navigation; members and
 viewers see Advising. **Navigation focus** offers Advising, Finance and Management
-presets, saved per user in this browser. It changes prominent links and mobile
+presets, saved per user in this browser. **Leads** remains visible directly below
+**My work today** in every preset. It changes prominent links and mobile
 shortcuts, not security roles or permissions. **All modules** keeps every module
 available. System administration remains administrator-only.
 
@@ -161,3 +162,35 @@ preservation, keyboard use and stale search responses. The real-provider runner
 was exercised against the temporary unconfigured app and reported all four
 integrations as not configured. No real provider delivery or actual staff
 participation is included in these results.
+
+## Draft isolation and list counts
+
+Modal drafts now use the user, page, form title and explicit record ID as their
+session-storage identity. Payment drafts use their invoice ID; creation forms
+have a separate new-record identity. Switching records in a reused dialog
+replaces the draft listeners. Previous draft keys without a record ID are not
+automatically restored because their record cannot be determined safely.
+Files, passwords and consent still require fresh selection; recovered drafts
+retain their original record revisions for stale-save checks.
+
+School and agent pages fetch visible student totals with one grouped query per
+page instead of one query per displayed record. Counts retain workspace and
+record visibility restrictions and include zero for unmatched records.
+
+## Daily work and application clarity
+
+Daily work cards label the reason for attention and the next action, with a
+contextual link to the relevant application, document, handoff or finance page.
+Additional context and the all-record overview are expandable.
+
+Application essentials group the responsible owner, next action, due date and
+requirements near the top of the page. Completed requirements and document
+assignment controls are expandable; missing requirements stay visible. Ownership
+and handoffs open automatically when linked from daily work with `#handoff`.
+Staff-facing navigation, application forms, student panels and invoice labels
+use “Applications”; API paths and internal case identifiers stay compatible.
+
+Record modal save failures provide recovery instructions alongside the original
+error. Conflict recovery keeps the draft in the current tab and asks staff to
+refresh, reopen, restore and compare before saving. Network or server failures
+ask staff to check the saved record before retrying to avoid duplicate changes.

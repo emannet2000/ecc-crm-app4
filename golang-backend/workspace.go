@@ -152,7 +152,7 @@ type SearchResult struct {
 	Subtitle string `json:"subtitle"`
 }
 
-func (state *runtimeStore) handleSearch(w http.ResponseWriter, r *http.Request) {
+func handleSearch(w http.ResponseWriter, r *http.Request) {
 	query := strings.TrimSpace(r.URL.Query().Get("q"))
 	if len([]rune(query)) < 2 {
 		writeJSON(w, 200, map[string]any{"results": []SearchResult{}, "truncated": false})
@@ -166,11 +166,11 @@ func (state *runtimeStore) handleSearch(w http.ResponseWriter, r *http.Request) 
 	terms := []string{}
 	args := []any{}
 	for _, entity := range searchableEntities {
-		title := "coalesce(json_extract(data,'$." + entity.title + "'),'')"
-		subtitle := "coalesce(json_extract(data,'$." + entity.subtitle + "'),'')"
-		fields := []string{title, subtitle, "coalesce(json_extract(data,'$.company'),'')", "coalesce(json_extract(data,'$.phone'),'')", "coalesce(json_extract(data,'$.contactName'),'')"}
-		scope, scopeArgs := scopeSQL(r, "data")
-		terms = append(terms, "SELECT '"+entity.table+"' AS entity,id,"+title+" AS title,"+subtitle+" AS subtitle FROM "+entity.table+" WHERE ("+strings.Join(fields, " || ' ' || ")+") LIKE ? ESCAPE '\\'")
+		title := "coalesce(json_extract(record.data,'$." + entity.title + "'),'')"
+		subtitle := "coalesce(json_extract(record.data,'$." + entity.subtitle + "'),'')"
+		fields := []string{title, subtitle, "coalesce(json_extract(record.data,'$.company'),'')", "coalesce(json_extract(record.data,'$.phone'),'')", "coalesce(json_extract(record.data,'$.contactName'),'')"}
+		scope, scopeArgs := repositoryVisibility(r, entity.table)
+		terms = append(terms, "SELECT '"+entity.table+"' AS entity,record.id,"+title+" AS title,"+subtitle+" AS subtitle FROM "+entity.table+" record WHERE ("+strings.Join(fields, " || ' ' || ")+") LIKE ? ESCAPE '\\'")
 		terms[len(terms)-1] += " AND (" + scope + ")"
 		args = append(args, "%"+escaped+"%")
 		args = append(args, scopeArgs...)
@@ -188,9 +188,7 @@ func (state *runtimeStore) handleSearch(w http.ResponseWriter, r *http.Request) 
 			writeError(w, 500, "Could not search records")
 			return
 		}
-		if _, visible := recordsOf(state.snapshot())[result.Entity][result.ID]; visible {
-			results = append(results, result)
-		}
+		results = append(results, result)
 	}
 	if rows.Err() != nil {
 		writeError(w, 500, "Could not search records")
@@ -201,12 +199,6 @@ func (state *runtimeStore) handleSearch(w http.ResponseWriter, r *http.Request) 
 		results = results[:30]
 	}
 	writeJSON(w, 200, map[string]any{"results": results, "truncated": truncated})
-}
-
-func handleSearch(w http.ResponseWriter, r *http.Request) {
-	state, release := runtimeForCall(r)
-	defer release()
-	state.handleSearch(w, r)
 }
 
 func csvValue(value any) string {

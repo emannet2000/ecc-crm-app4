@@ -205,7 +205,7 @@ func handleStripeWebhook(w http.ResponseWriter, r *http.Request) {
 	state.handleStripeWebhook(w, r)
 }
 func (state *runtimeStore) handleGatewayRefund(w http.ResponseWriter, r *http.Request) {
-	if !isManager(currentUser(r)) {
+	if !financeCapability(r, "refunds") {
 		writeError(w, 403, "Manager approval is required")
 		return
 	}

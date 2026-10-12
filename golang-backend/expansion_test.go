@@ -71,7 +71,7 @@ func newBareContact(t *testing.T, h http.Handler) Contact {
 	}
 	return out.Contact
 }
-func recordVersion(t *testing.T, h http.Handler, id string) string {
+func fixtureRecordVersion(t *testing.T, h http.Handler, id string) string {
 	t.Helper()
 	w := expansionRequest(t, h, "GET", "/api/records/contacts/"+id, nil, "")
 	assertStatus(t, w, 200)
@@ -83,7 +83,7 @@ func TestRecordVersionRejectsStaleEditsAndDeletes(t *testing.T) {
 	setupStore(t)
 	h := expansionTestMux()
 	c := newBareContact(t, h)
-	version := recordVersion(t, h, c.ID)
+	version := fixtureRecordVersion(t, h, c.ID)
 	changed := map[string]any{"name": "Changed client", "email": c.Email, "stage": "Lead"}
 	assertStatus(t, expansionRequest(t, h, "PUT", "/api/contacts/"+c.ID, changed, version), 200)
 	assertStatus(t, expansionRequest(t, h, "PUT", "/api/contacts/"+c.ID, map[string]any{"name": "Stale client", "email": c.Email, "stage": "Lead"}, version), 409)

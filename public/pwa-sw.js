@@ -1,6 +1,7 @@
 'use strict';
 
-const CACHE_NAME = 'ecc-crm-shell-v1';
+const CACHE_NAME = 'ecc-crm-shell-v6';
+importScripts('/public/offline-worker.js');
 const APP_SHELL = [
   '/',
   '/elm.js',
@@ -9,11 +10,29 @@ const APP_SHELL = [
   '/public/workspace.css',
   '/public/mobile-tables.css',
   '/public/mobile.css',
+  '/public/center.css',
+  '/public/components.css',
+  '/public/administration.css',
   '/public/record-versions.js',
+  '/public/draft-recovery.js',
+  '/public/workspace-interactions.js',
+  '/public/productivity.js',
+  '/public/workflow-controls.js',
+  '/public/consolidation.js', '/public/everyday.js',
   '/public/center.js',
+  '/public/followup-templates.js',
+  '/public/lead-work.js',
+  '/public/assignment-review.js',
   '/public/components.js',
   '/public/administration.js',
   '/public/mobile.js',
+  '/public/offline.js',
+  '/public/offline-worker.js',
+  '/public/usability.js',
+  '/public/handoffs.js',
+  '/public/pickers.js',
+  '/public/progress.js',
+  '/public/ai.js',
   '/public/bootstrap.js',
   '/public/icons/ecc-192.png',
   '/public/icons/ecc-512.png',
@@ -21,7 +40,7 @@ const APP_SHELL = [
 ];
 
 self.addEventListener('install', event => {
-  event.waitUntil(caches.open(CACHE_NAME).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
+  event.waitUntil(offlineReady.then(() => caches.open(CACHE_NAME)).then(cache => cache.addAll(APP_SHELL)).then(() => self.skipWaiting()));
 });
 
 self.addEventListener('activate', event => {
@@ -31,7 +50,9 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
   const request = event.request;
   const url = new URL(request.url);
-  if (request.method !== 'GET' || url.origin !== self.location.origin || url.pathname.startsWith('/api/')) return;
+  if (url.origin !== self.location.origin) return;
+  if (url.pathname.startsWith('/api/')) { if (offlineMode !== false) event.respondWith(handlePrivateRequest(request)); return; }
+  if (request.method !== 'GET') return;
 
   if (request.mode === 'navigate') {
     // Only cache the public CRM shell. Never cache portal pages or authenticated data.

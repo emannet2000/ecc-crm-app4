@@ -223,11 +223,11 @@ func (state *runtimeStore) handlePortalMe(w http.ResponseWriter, r *http.Request
 	allowed := state.portalCases(g)
 	cs, ds, is := []map[string]any{}, []map[string]any{}, []map[string]any{}
 	for _, c := range allowed {
-		cs = append(cs, map[string]any{"id": c.ID, "caseNumber": c.CaseNumber, "stage": c.CurrentStage, "nextAction": c.NextAction, "deadline": c.NextDeadline, "destination": c.DestinationCountry})
+		cs = append(cs, map[string]any{"id": c.ID, "caseNumber": c.CaseNumber, "stage": c.CurrentStage, "nextAction": fmtString(portalClientTask(r, c.ID)["instructions"]), "clientTask": portalClientTask(r, c.ID), "adviser": portalAdviser(r, c.AssignedOfficer, c.OwnerID), "deadline": c.NextDeadline, "destination": c.DestinationCountry})
 	}
 	for _, d := range s.Documents {
 		if _, ok := allowed[d.CaseID]; ok && d.OrgID == g.OrgID {
-			ds = append(ds, map[string]any{"id": d.ID, "name": d.DocName, "caseNumber": d.CaseNumber, "required": d.Required, "status": d.Status, "latestVersion": d.LatestVersion, "rejectionReason": d.RejectionReason})
+			ds = append(ds, map[string]any{"id": d.ID, "name": d.DocName, "caseNumber": d.CaseNumber, "required": d.Required, "status": d.Status, "latestVersion": d.LatestVersion, "rejectionReason": d.RejectionReason, "dueDate": d.DueDate})
 		}
 	}
 	for _, i := range s.Invoices {
@@ -243,7 +243,7 @@ func (state *runtimeStore) handlePortalMe(w http.ResponseWriter, r *http.Request
 		}
 	}
 	messages := []map[string]any{}
-	rows, err := queryObjects(r, "SELECT id,case_id AS caseId,body,created_at AS createdAt FROM conversations WHERE org_id=? AND contact_id=? AND channel='portal' ORDER BY created_at DESC LIMIT 50", g.OrgID, g.ContactID)
+	rows, err := queryObjects(r, "SELECT id,case_id AS caseId,direction,body,created_at AS createdAt FROM conversations WHERE org_id=? AND contact_id=? AND channel='portal' ORDER BY created_at DESC LIMIT 50", g.OrgID, g.ContactID)
 	if err != nil {
 		writeError(w, 500, "Could not load portal messages")
 		return

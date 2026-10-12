@@ -33,6 +33,8 @@ func TestMyWorkFullCountsScopeAndPagination(t *testing.T) {
 	u, _ := findUserByEmail("demo@northwind.dev")
 	scope := RecordScope{OrgID: u.OrgID, OwnerID: u.ID, Visibility: "organization"}
 	mu.Lock()
+	invoices = nil
+	payments = nil
 	cases = nil
 	tasks = nil
 	leads = nil
@@ -62,7 +64,7 @@ func TestMyWorkFullCountsScopeAndPagination(t *testing.T) {
 		Counts map[string]int
 	}
 	json.Unmarshal(w.Body.Bytes(), &out)
-	if out.Total != 60 || len(out.Items) != 25 || out.Counts["applications"] != 60 || out.Counts["documents"] != 1 {
+	if out.Total != 61 || len(out.Items) != 25 || out.Counts["applications"] != 60 || out.Counts["documents"] != 1 {
 		t.Fatalf("wrong totals: %s", w.Body.String())
 	}
 	if strings.Contains(w.Body.String(), "other-org") || strings.Contains(w.Body.String(), "other-owner") {
@@ -71,10 +73,23 @@ func TestMyWorkFullCountsScopeAndPagination(t *testing.T) {
 	w = dailyUserRequest(t, h, u, "GET", "/api/my-work?scope=all", nil)
 	assertStatus(t, w, 200)
 	json.Unmarshal(w.Body.Bytes(), &out)
-	if out.Total != 61 {
+	if out.Total != 62 {
 		t.Fatal(w.Body.String())
 	}
 	assertStatus(t, dailyUserRequest(t, h, u, "GET", "/api/my-work?scope=invalid", nil), 400)
+	w = dailyUserRequest(t, h, u, "GET", "/api/my-work?scope=mine&category=documents", nil)
+	assertStatus(t, w, 200)
+	json.Unmarshal(w.Body.Bytes(), &out)
+	if out.Total != 1 || len(out.Items) != 1 || out.Items[0].ID != "daily_000" || out.Counts["applications"] != 60 {
+		t.Fatalf("category must filter before pagination and retain summary totals: %s", w.Body.String())
+	}
+	w = dailyUserRequest(t, h, u, "GET", "/api/my-work?category=overdueLeads", nil)
+	assertStatus(t, w, 200)
+	json.Unmarshal(w.Body.Bytes(), &out)
+	if out.Total != 0 || len(out.Items) != 0 {
+		t.Fatal(w.Body.String())
+	}
+	assertStatus(t, dailyUserRequest(t, h, u, "GET", "/api/my-work?category=invalid", nil), 400)
 }
 func TestJourneyKeepsStudentCaseAndMessageBoundaries(t *testing.T) {
 	setupStore(t)

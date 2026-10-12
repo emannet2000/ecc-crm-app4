@@ -41,6 +41,10 @@ func (state *runtimeStore) handleComposeMail(w http.ResponseWriter, r *http.Requ
 	}
 	var contact Contact
 	if req.ContactID != "" {
+		if !contactAllowed(r, req.ContactID) {
+			writeError(w, 409, "Client has a do-not-contact restriction")
+			return
+		}
 		found := false
 		state.mu.RLock()
 		for _, candidate := range state.contacts {
@@ -173,6 +177,9 @@ func smtpConfiguration(org string) smtpSettings {
 	return config
 }
 func deliverSMTP(config smtpSettings, recipient, subject, body string, attachment []byte) error {
+	return deliverSMTPAttachment(config, recipient, subject, body, attachment, "application/pdf", "invoice.pdf")
+}
+func deliverSMTPAttachment(config smtpSettings, recipient, subject, body string, attachment []byte, contentType, filename string) error {
 	if config.Host == "" {
 		return fmt.Errorf("SMTP is not configured")
 	}
@@ -233,7 +240,7 @@ func deliverSMTP(config smtpSettings, recipient, subject, body string, attachmen
 		message.WriteString(wrapBase64([]byte(body)))
 	} else {
 		boundary := "ecc_" + randomSecret()
-		fmt.Fprintf(&message, "Content-Type: multipart/mixed; boundary=%q\r\n\r\n--%s\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n%s\r\n--%s\r\nContent-Type: application/pdf\r\nContent-Disposition: attachment; filename=\"invoice.pdf\"\r\nContent-Transfer-Encoding: base64\r\n\r\n%s\r\n--%s--\r\n", boundary, boundary, wrapBase64([]byte(body)), boundary, wrapBase64(attachment), boundary)
+		fmt.Fprintf(&message, "Content-Type: multipart/mixed; boundary=%q\r\n\r\n--%s\r\nContent-Type: text/plain; charset=utf-8\r\nContent-Transfer-Encoding: base64\r\n\r\n%s\r\n--%s\r\nContent-Type: %s\r\nContent-Disposition: attachment; filename=\"%s\"\r\nContent-Transfer-Encoding: base64\r\n\r\n%s\r\n--%s--\r\n", boundary, boundary, wrapBase64([]byte(body)), boundary, contentType, filename, wrapBase64(attachment), boundary)
 	}
 	if _, err = writer.Write(message.Bytes()); err != nil {
 		return err
@@ -280,6 +287,7 @@ func startWorkers(ctx context.Context) func() {
 				markWorkerRun("mail-delivery", "reminders", "follow-up-automation", "webhooks", "push-notifications")
 				deliverMailOutbox()
 				generateReminders()
+				generateConsultationReminders()
 				runFollowupRules()
 				deliverWebhooks()
 				deliverPushNotifications()
@@ -290,18 +298,18 @@ func startWorkers(ctx context.Context) func() {
 }
 func deliverMailOutbox() {
 	database.Exec("UPDATE mail_outbox SET status='delivery_unknown',last_error='Delivery was interrupted; verify with the provider before retrying' WHERE status='sending' AND next_attempt<=?", utcNow())
-	rows, err := database.Query(`SELECT id,org_id,recipient,subject,body,invoice_id,attempts FROM mail_outbox WHERE status IN ('queued','waiting_configuration') AND (next_attempt='' OR next_attempt<=?) ORDER BY created_at LIMIT 10`, utcNow())
+	rows, err := database.Query(`SELECT id,org_id,recipient,subject,body,invoice_id,kind,attempts FROM mail_outbox WHERE status IN ('queued','waiting_configuration') AND (next_attempt='' OR next_attempt<=?) ORDER BY created_at LIMIT 10`, utcNow())
 	if err != nil {
 		return
 	}
 	type delivery struct {
-		id, org, recipient, subject, body, invoice string
-		attempts                                   int
+		id, org, recipient, subject, body, invoice, kind string
+		attempts                                         int
 	}
 	jobs := []delivery{}
 	for rows.Next() {
 		var job delivery
-		if rows.Scan(&job.id, &job.org, &job.recipient, &job.subject, &job.body, &job.invoice, &job.attempts) == nil {
+		if rows.Scan(&job.id, &job.org, &job.recipient, &job.subject, &job.body, &job.invoice, &job.kind, &job.attempts) == nil {
 			jobs = append(jobs, job)
 		}
 	}
@@ -324,7 +332,30 @@ func deliverMailOutbox() {
 				attachment, _ = invoicePDF(invoice)
 			}
 		}
-		err := deliverSMTP(config, job.recipient, job.subject, job.body, attachment)
+		contentType, filename := "application/pdf", "invoice.pdf"
+		if strings.HasPrefix(job.kind, "consultation:") {
+			pieces := strings.Split(job.kind, ":")
+			var raw string
+			if len(pieces) < 3 || database.QueryRow("SELECT data FROM workspace_entries WHERE id=? AND org_id=? AND category='calendar_event'", pieces[1], job.org).Scan(&raw) != nil {
+				database.Exec("UPDATE mail_outbox SET status='cancelled' WHERE id=?", job.id)
+				continue
+			}
+			var c consultation
+			json.Unmarshal([]byte(raw), &c)
+			if fmt.Sprint(c.Sequence) != pieces[2] {
+				database.Exec("UPDATE mail_outbox SET status='cancelled' WHERE id=?", job.id)
+				continue
+			}
+			attachment = consultationCalendar(pieces[1], c)
+			contentType, filename = "text/calendar; charset=utf-8", "consultation.ics"
+		}
+		var blocked int
+		database.QueryRow("SELECT count(*) FROM workspace_entries WHERE org_id=? AND category='client_profile' AND record_id=(SELECT 'contacts:'||contact_id FROM mail_outbox WHERE id=?) AND json_extract(data,'$.doNotContact')=1", job.org, job.id).Scan(&blocked)
+		if blocked > 0 {
+			database.Exec("UPDATE mail_outbox SET status='cancelled',last_error='Client do-not-contact restriction' WHERE id=?", job.id)
+			continue
+		}
+		err := deliverSMTPAttachment(config, job.recipient, job.subject, job.body, attachment, contentType, filename)
 		if err == nil {
 			database.Exec("UPDATE mail_outbox SET status='sent',sent_at=?,attempts=attempts+1,last_error='' WHERE id=?", utcNow(), job.id)
 		} else {

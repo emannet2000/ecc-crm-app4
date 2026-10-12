@@ -100,7 +100,7 @@ func scopeForRelatedRequest(r *http.Request, projected diskStore) RecordScope {
 		return scope
 	}
 	records := recordsOf(projected)
-	relations := map[string]string{"caseId": "cases", "invoiceId": "invoices", "contactId": "contacts", "clientId": "contacts"}
+	relations := map[string]string{"leadId": "leads", "caseId": "cases", "invoiceId": "invoices", "contactId": "contacts", "clientId": "contacts"}
 	for field, table := range relations {
 		if payload, ok := records[table][fields[field]]; ok {
 			var parent RecordScope

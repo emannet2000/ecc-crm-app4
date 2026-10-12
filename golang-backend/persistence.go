@@ -172,7 +172,10 @@ func persistMutations(next http.Handler) http.Handler {
 			before = state.before
 			after := state.snapshot()
 			events := changesBetween(before, after, actor)
-			err = archiveDeleted(r, before, after, actor)
+			err = trackLeadTimeline(r, before, after, actor)
+			if err == nil {
+				err = archiveDeleted(r, before, after, actor)
+			}
 			if err == nil {
 				err = saveStoreDeltaTx(tx, before, after, events)
 			}

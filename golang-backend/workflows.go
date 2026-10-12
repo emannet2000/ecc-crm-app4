@@ -146,6 +146,24 @@ func (state *runtimeStore) handleWorkflow(w http.ResponseWriter, r *http.Request
 			writeError(w, 400, "Enter a template name and one document per line")
 			return
 		}
+		if action == "case-template" {
+			if len(text("service")) > 120 || len(text("nextAction")) > 1000 || len(text("name")) > 100 || len(text("documents")) > 10000 || number("deadlineDays") < 0 || number("deadlineDays") > 3650 || number("deadlineDays") != float64(int(number("deadlineDays"))) {
+				writeError(w, 400, "Enter a valid service template with a deadline of 0–3650 days")
+				return
+			}
+			for _, name := range strings.Split(text("documents"), "\n") {
+				if len(strings.TrimSpace(name)) > 200 {
+					writeError(w, 400, "Keep each document name within 200 characters")
+					return
+				}
+			}
+			for _, stage := range strings.Split(text("stages"), "\n") {
+				if stage = strings.TrimSpace(stage); stage != "" && !isValidCaseStage(stage) {
+					writeError(w, 400, "Use supported application stages, one per line")
+					return
+				}
+			}
+		}
 		category := strings.ReplaceAll(action, "-", "_")
 		saved, err := entry(r, category, "", req, false)
 		if err != nil {
@@ -218,36 +236,10 @@ func (state *runtimeStore) handleWorkflow(w http.ResponseWriter, r *http.Request
 			return
 		}
 	case "lead-convert":
-		for i, l := range state.leads {
-			if l.ID != id {
-				continue
-			}
-			if !editable(l.RecordScope) {
-				return
-			}
-			if l.ConvertedContactID != "" {
-				writeJSON(w, 200, map[string]string{"contactId": l.ConvertedContactID})
-				return
-			}
-			var contact Contact
-			for _, c := range state.contacts {
-				if l.Email != "" && strings.EqualFold(l.Email, c.Email) {
-					if !editable(c.RecordScope) {
-						return
-					}
-					contact = c
-					break
-				}
-			}
-			if contact.ID == "" {
-				contact = Contact{RecordScope: l.RecordScope, ID: newID("c"), Name: l.Name, Email: l.Email, Phone: l.Phone, Location: l.CurrentCountry, Stage: "Lead", Owner: l.AssignedTo, Notes: l.Notes, Tags: []string{}, CreatedAt: organizationToday(r)}
-				state.contacts = append(state.contacts, contact)
-			}
-			state.leads[i].ConvertedContactID = contact.ID
-			state.leads[i].Status = "Converted"
-			writeJSON(w, 200, map[string]string{"contactId": contact.ID})
-			return
-		}
+		var duplicateConfirmed bool
+		json.Unmarshal(req["duplicateConfirmed"], &duplicateConfirmed)
+		state.convertLead(w, r, id, text("target"), duplicateConfirmed)
+		return
 	case "lead":
 		for i, l := range state.leads {
 			if l.ID == id {
@@ -426,17 +418,52 @@ func (state *runtimeStore) handleWorkflow(w http.ResponseWriter, r *http.Request
 			var auto bool
 			json.Unmarshal(req["autoAdvance"], &auto)
 			c.AutoAdvance = auto
-			if template := text("templateId"); template != "" && template != c.TemplateID {
+			if template := text("templateId"); template != "" {
 				var payload string
 				if storeDB(r).QueryRow("SELECT data FROM workspace_entries WHERE id=? AND org_id=? AND category='case_template'", template, u.OrgID).Scan(&payload) != nil {
 					fail("Template not found")
 					return
 				}
-				var t map[string]string
-				json.Unmarshal([]byte(payload), &t)
-				for _, name := range strings.Split(t["documents"], "\n") {
-					if strings.TrimSpace(name) != "" {
-						state.documents = append(state.documents, Document{RecordScope: c.RecordScope, ID: newID("doc"), CaseID: c.ID, CaseNumber: c.CaseNumber, DocName: strings.TrimSpace(name), Required: true, Status: "Not Requested", CreatedBy: u.Name, CreatedAt: organizationToday(r)})
+				var t struct {
+					Documents    string `json:"documents"`
+					Service      string `json:"service"`
+					NextAction   string `json:"nextAction"`
+					DeadlineDays int    `json:"deadlineDays"`
+				}
+				if json.Unmarshal([]byte(payload), &t) != nil {
+					fail("Could not read the application template")
+					return
+				}
+				t.Service = strings.TrimSpace(t.Service)
+				if t.Service != "" && !strings.EqualFold(strings.TrimSpace(t.Service), strings.TrimSpace(c.ServiceCategory)) {
+					fail("Choose a template matching this application's service")
+					return
+				}
+				existing := map[string]bool{}
+				for _, d := range state.documents {
+					if d.CaseID == c.ID {
+						existing[strings.ToLower(strings.TrimSpace(d.DocName))] = true
+					}
+				}
+				if template != c.TemplateID {
+					for _, name := range strings.Split(t.Documents, "\n") {
+						name = strings.TrimSpace(name)
+						key := strings.ToLower(name)
+						if name != "" && !existing[key] {
+							state.documents = append(state.documents, Document{RecordScope: c.RecordScope, ID: newID("doc"), CaseID: c.ID, CaseNumber: c.CaseNumber, DocName: name, Required: true, Status: "Not Requested", CreatedBy: u.Name, CreatedAt: organizationToday(r)})
+							existing[key] = true
+						}
+					}
+				}
+				var applyPlan bool
+				json.Unmarshal(req["applyTemplatePlan"], &applyPlan)
+				if applyPlan {
+					if strings.TrimSpace(c.NextAction) == "" {
+						c.NextAction = t.NextAction
+					}
+					if c.NextDeadline == "" && t.DeadlineDays > 0 {
+						today, _ := time.Parse("2006-01-02", organizationToday(r))
+						c.NextDeadline = today.AddDate(0, 0, t.DeadlineDays).Format("2006-01-02")
 					}
 				}
 				c.TemplateID = template
@@ -502,7 +529,7 @@ func (state *runtimeStore) handleWorkflow(w http.ResponseWriter, r *http.Request
 			return
 		}
 	case "credit-note":
-		if !isManager(u) {
+		if !financeCapability(r, "approveAdjustments") {
 			writeError(w, 403, "Manager approval is required")
 			return
 		}
@@ -546,7 +573,7 @@ func (state *runtimeStore) handleWorkflow(w http.ResponseWriter, r *http.Request
 			}
 		}
 	case "refund-review", "refund-process", "refund-reverse":
-		if !isManager(u) {
+		if !financeCapability(r, "refunds") {
 			writeError(w, 403, "Manager approval is required")
 			return
 		}

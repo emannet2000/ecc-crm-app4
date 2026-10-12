@@ -64,7 +64,7 @@ func BenchmarkRecordReads(b *testing.B) {
 // 5,000 clients/applications plus another workspace. This is a local baseline,
 // not a declaration of production throughput or multi-process safety.
 func BenchmarkRepositoryWorkload(b *testing.B) {
-	for _, mode := range []string{"paged-list", "daily-work", "validated-write"} {
+	for _, mode := range []string{"paged-list", "search", "application-load", "application-requirements", "dashboard-reports", "daily-work", "validated-write"} {
 		b.Run(mode, func(b *testing.B) {
 			jwtSecret = []byte("benchmark-only-secret")
 			b.Setenv("LEGACY_DATA_FILE", "")
@@ -93,10 +93,23 @@ func BenchmarkRepositoryWorkload(b *testing.B) {
 			}
 			token, _ := issueToken(u)
 			h := expansionTestMux()
+			if mode == "search" || mode == "dashboard-reports" {
+				h = featureMux()
+			}
 			b.ReportAllocs()
 			b.ResetTimer()
 			for i := 0; i < b.N; i++ {
 				method, path, body := "GET", "/api/contacts?limit=25&offset=500&sort=name", ""
+				switch mode {
+				case "search":
+					path = "/api/search?q=client-123"
+				case "application-load":
+					path = "/api/records/cases/case-workload-00001"
+				case "application-requirements":
+					path = "/api/cases/case-workload-00001/blockers"
+				case "dashboard-reports":
+					path = "/api/reports"
+				}
 				if mode == "daily-work" {
 					path = "/api/my-work?limit=25"
 				}

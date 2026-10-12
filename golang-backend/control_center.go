@@ -11,6 +11,7 @@ import (
 )
 
 func registerWorkspaceRoutes(mux *http.ServeMux) {
+	registerConsolidatedRoutes(mux)
 	registerAdministrationRoutes(mux)
 	mux.HandleFunc("GET /api/clock", authMiddleware(handleWorkspaceClock))
 	mux.HandleFunc("GET /api/control-center", authMiddleware(handleControlCenter))
@@ -88,7 +89,7 @@ func (state *runtimeStore) handleControlCenter(w http.ResponseWriter, r *http.Re
 		"sessions":      {"SELECT id,created_at AS createdAt,last_seen AS lastSeen,expires_at AS expiresAt,refresh_expires_at AS refreshExpiresAt,ip,user_agent AS userAgent FROM sessions WHERE user_id=? AND revoked_at IS NULL AND version=? AND refresh_expires_at>? ORDER BY last_seen DESC", []any{user.ID, user.SessionVersion, utcNow()}},
 		"notifications": {"SELECT id,kind,title,body,path,created_at AS createdAt,read_at AS readAt FROM notifications WHERE user_id=? ORDER BY created_at DESC LIMIT 100", []any{user.ID}},
 		"mail":          {"SELECT id,kind,recipient,subject,status,attempts,last_error AS lastError,created_at AS createdAt,sent_at AS sentAt,contact_id AS contactId,invoice_id AS invoiceId FROM mail_outbox WHERE org_id=? AND (user_id=? OR ? IN ('admin','manager')) AND kind NOT IN ('password_reset','invite') ORDER BY created_at DESC LIMIT 100", []any{user.OrgID, user.ID, user.Role}},
-		"entries":       {"SELECT id,category,record_id AS recordId,data,created_at AS createdAt FROM workspace_entries WHERE org_id=? AND category<>'ai_job' AND (user_id=? OR (user_id='' AND category NOT IN ('integration_secret','webhook'))) ORDER BY created_at DESC", []any{user.OrgID, user.ID}},
+		"entries":       {"SELECT id,category,record_id AS recordId,data,created_at AS createdAt FROM workspace_entries WHERE org_id=? AND category NOT IN ('ai_job','lead_timeline') AND (user_id=? OR (user_id='' AND category NOT IN ('integration_secret','webhook'))) ORDER BY created_at DESC", []any{user.OrgID, user.ID}},
 	}
 	if isAdmin(user) {
 		queries["webhooks"] = struct {

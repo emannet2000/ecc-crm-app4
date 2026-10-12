@@ -16,11 +16,24 @@ import (
 
 // These routes read committed SQL data without replacing the shared CRM cache.
 func independentRead(r *http.Request) bool {
+	if r.Method == "GET" && (r.URL.Path == "/api/work-outcomes" || r.URL.Path == "/api/communication" || r.URL.Path == "/api/workspace-calendar" || r.URL.Path == "/api/referral-directory") {
+		return true
+	}
 	_, _, repository := repositoryRoute(r)
-	return repository || r.Method == "GET" && (r.URL.Path == "/api/reports" || r.URL.Path == "/api/audit") || independentDailyRead(r) || independentAI(r) || r.Method == "GET" && (strings.HasPrefix(r.URL.Path, "/api/records/") || r.URL.Path == "/api/insights" || r.URL.Path == "/api/health")
+	return repository || r.Method == "GET" && (r.URL.Path == "/api/reports" || r.URL.Path == "/api/audit" || r.URL.Path == "/api/search") || independentDailyRead(r) || independentAI(r) || r.Method == "GET" && (strings.HasPrefix(r.URL.Path, "/api/records/") || r.URL.Path == "/api/insights" || r.URL.Path == "/api/health")
 }
 func registerExpansionRoutes(m *http.ServeMux) {
 	registerDailyRoutes(m)
+	m.HandleFunc("GET /api/escalation-rules", authMiddleware(handleEscalationRules))
+	m.HandleFunc("POST /api/escalation-rules", authMiddleware(handleEscalationRules))
+	m.HandleFunc("GET /api/application-gates", authMiddleware(handleGatePolicies))
+	m.HandleFunc("PUT /api/application-gates", authMiddleware(handleGatePolicies))
+	m.HandleFunc("GET /api/cases/{id}/gates", authMiddleware(handleCaseGates))
+	m.HandleFunc("POST /api/cases/{id}/gate-approval", authMiddleware(handleGateApproval))
+	m.HandleFunc("POST /api/cases/{id}/transition", authMiddleware(handleCaseTransition))
+	m.HandleFunc("PUT /api/trash/policy", authMiddleware(handleTrashPolicy))
+	m.HandleFunc("GET /api/trash/purge-preview", authMiddleware(handleTrashPreview))
+	m.HandleFunc("POST /api/trash/purge", authMiddleware(handleTrashPurge))
 	m.HandleFunc("GET /api/records/{entity}/{id}", authMiddleware(handleSQLRecord))
 	m.HandleFunc("GET /api/insights", authMiddleware(handleInsights))
 	m.HandleFunc("GET /api/trash", authMiddleware(handleTrash))
@@ -34,6 +47,12 @@ func migrateExpansion(tx *sql.Tx) error {
 	statements := []string{
 		`CREATE INDEX IF NOT EXISTS contacts_org_email ON contacts(json_extract(data,'$.orgId'),lower(json_extract(data,'$.email')))`,
 		`CREATE TABLE IF NOT EXISTS trash_batches(id TEXT PRIMARY KEY,org_id TEXT NOT NULL,actor TEXT NOT NULL,label TEXT NOT NULL,data TEXT NOT NULL,deleted_at TEXT NOT NULL,restored_at TEXT)`,
+		`CREATE TABLE IF NOT EXISTS application_gate_rules(org_id TEXT NOT NULL,stage TEXT NOT NULL,data TEXT NOT NULL,PRIMARY KEY(org_id,stage))`,
+		`CREATE TABLE IF NOT EXISTS application_gate_approvals(org_id TEXT NOT NULL,case_id TEXT NOT NULL,stage TEXT NOT NULL,fingerprint TEXT NOT NULL,actor TEXT NOT NULL,reason TEXT NOT NULL,approved_at TEXT NOT NULL,PRIMARY KEY(org_id,case_id,stage,fingerprint))`,
+		`CREATE TABLE IF NOT EXISTS escalation_rules(id TEXT PRIMARY KEY,org_id TEXT NOT NULL,data TEXT NOT NULL)`,
+		`CREATE TABLE IF NOT EXISTS escalation_deliveries(rule_id TEXT NOT NULL,entity TEXT NOT NULL,record_id TEXT NOT NULL,episode TEXT NOT NULL,recipient TEXT NOT NULL,created_at TEXT NOT NULL,PRIMARY KEY(rule_id,entity,record_id,episode,recipient))`,
+		`CREATE TABLE IF NOT EXISTS trash_policy(org_id TEXT PRIMARY KEY,days INTEGER NOT NULL DEFAULT 30,automatic INTEGER NOT NULL DEFAULT 0)`,
+		`CREATE TABLE IF NOT EXISTS file_gc(path TEXT PRIMARY KEY)`,
 		`CREATE INDEX IF NOT EXISTS trash_org ON trash_batches(org_id,deleted_at)`,
 		`CREATE TABLE IF NOT EXISTS portal_access(id TEXT PRIMARY KEY,org_id TEXT NOT NULL,student_id TEXT NOT NULL,contact_id TEXT NOT NULL,email TEXT NOT NULL,token_hash TEXT NOT NULL UNIQUE,created_at TEXT NOT NULL,expires_at TEXT NOT NULL,revoked_at TEXT,activated_at TEXT)`,
 		`CREATE INDEX IF NOT EXISTS portal_student ON portal_access(org_id,student_id)`,
@@ -110,6 +129,9 @@ func checkRecordVersion(w http.ResponseWriter, r *http.Request, s diskStore) boo
 	} // Compatibility for existing integrations.
 	parts := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
 	entity, id := "", r.PathValue("id")
+	if strings.HasPrefix(r.URL.Path, "/api/assignments/") {
+		entity = r.PathValue("entity")
+	}
 	if len(parts) > 1 && validEntity(parts[1]) {
 		entity = parts[1]
 	}
@@ -162,7 +184,11 @@ func sqlRecord(r *http.Request, entity, id string) (map[string]any, error) {
 		parents := map[string]string{}
 		switch entity {
 		case "documents":
-			parents["cases"] = fmtString(record["caseId"])
+			if caseID := fmtString(record["caseId"]); caseID != "" {
+				parents["cases"] = caseID
+			} else {
+				parents["leads"] = fmtString(record["leadId"])
+			}
 		case "payments":
 			parents["invoices"] = fmtString(record["invoiceId"])
 		case "activities":
@@ -336,7 +362,7 @@ func handleRestoreTrash(w http.ResponseWriter, r *http.Request) {
 }
 func validRestoredRelations(s diskStore, changes []trashChange) bool {
 	records := recordsOf(s)
-	refs := map[string]string{"contactId": "contacts", "clientId": "contacts", "caseId": "cases", "invoiceId": "invoices", "studentId": "students", "schoolId": "schools", "agentId": "agents", "partnerId": "partners", "parentCaseId": "cases", "dealId": "deals", "convertedContactId": "contacts"}
+	refs := map[string]string{"contactId": "contacts", "clientId": "contacts", "caseId": "cases", "invoiceId": "invoices", "studentId": "students", "schoolId": "schools", "agentId": "agents", "partnerId": "partners", "parentCaseId": "cases", "dealId": "deals", "convertedContactId": "contacts", "leadId": "leads", "convertedCaseId": "cases", "convertedStudentId": "students"}
 	for _, c := range changes {
 		var record map[string]any
 		json.Unmarshal([]byte(c.Before), &record)

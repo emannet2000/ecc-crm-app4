@@ -728,6 +728,9 @@ func (state *runtimeStore) handleDataQuality(w http.ResponseWriter, r *http.Requ
 				for _, document := range s.Documents {
 					if document.ID == id {
 						route = "/cases/" + document.CaseID
+						if document.LeadID != "" {
+							route = "/leads/" + document.LeadID
+						}
 						break
 					}
 				}
@@ -844,7 +847,7 @@ func (state *runtimeStore) handleDataQuality(w http.ResponseWriter, r *http.Requ
 		}
 	}
 	for _, l := range s.Leads {
-		if l.OrgID == org && l.Status != "Converted" && l.Status != "Closed" && l.FollowUpDate == "" {
+		if l.OrgID == org && openLead(l.Status) && l.FollowUpDate == "" {
 			add("leads", l.ID, "warning", "Follow-up date missing", l.Name+" has no follow-up date.", l.RecordScope)
 		}
 	}
@@ -853,6 +856,7 @@ func (state *runtimeStore) handleDataQuality(w http.ResponseWriter, r *http.Requ
 			add("cases", c.ID, "error", "Deadline is overdue", c.CaseNumber+" passed its deadline on "+c.NextDeadline+".", c.RecordScope)
 		}
 	}
+	extendedRecordAudit(r, s, add)
 	sort.Slice(f, func(i, j int) bool {
 		if f[i].Severity != f[j].Severity {
 			return f[i].Severity == "error"

@@ -152,10 +152,10 @@ sidebar model user =
             ] []
         , nav [ class "sidebar__nav", Attr.attribute "aria-label" "Daily work" ]
             [ navItem effectiveRoute Home "My work today" iconHome
+            , navItem effectiveRoute Leads "Leads" iconLead
             , div [ class "nav-preset nav-preset--adviser" ]
                 [ navItem effectiveRoute Students "Students" iconStudent
                 , navItem effectiveRoute Cases "Applications" iconTasks
-                , navItem effectiveRoute Leads "Leads" iconLead
                 , navItem effectiveRoute Tasks "Tasks" iconTasks
                 ]
             , div [ class "nav-preset nav-preset--finance" ]
@@ -164,28 +164,29 @@ sidebar model user =
                 , navItem effectiveRoute Tasks "Tasks" iconTasks
                 ]
             , div [ class "nav-preset nav-preset--management" ]
-                [ if user.role == "admin" then navItem effectiveRoute Administration "System administration" iconSettings else text ""
-                , navItem effectiveRoute Workspace "Workspace tools" iconSettings
-                , navItem effectiveRoute Reports "Reports" iconReports
+                [ navItem effectiveRoute Reports "Reports" iconReports
                 , navItem effectiveRoute Cases "Applications" iconTasks
                 ]
             , details [ class "navigation-more", Attr.property "open" (Json.Encode.bool (List.member effectiveRoute [ Contacts, Schools, Agents, Partners, Deals ])) ]
                 [ summary [] [ text "All modules" ]
                 , navItem effectiveRoute Contacts "Contacts" iconContacts
-                , navItem effectiveRoute Leads "Leads" iconLead
                 , navItem effectiveRoute Students "Students" iconStudent
-                , navItem effectiveRoute Cases "Cases" iconTasks
+                , navItem effectiveRoute Cases "Applications" iconTasks
                 , navItem effectiveRoute Tasks "Tasks" iconTasks
                 , navItem effectiveRoute Schools "Schools" iconSchool
-                , navItem effectiveRoute Agents "Agents" iconAgent
-                , navItem effectiveRoute Partners "Partners" iconSchool
+                , a [ class "nav-item", Attr.href "/workspace?tab=directory" ]
+                    [ span [ class "nav-item__icon" ] [ iconAgent ]
+                    , span [ class "nav-item__label" ] [ text "Agents & partners" ]
+                    ]
                 , navItem effectiveRoute Deals "Deals" iconDeals
-                , navItem effectiveRoute Invoices "Invoices" iconDeals
+                , navItem effectiveRoute Invoices "Invoices & payments" iconDeals
                 , navItem effectiveRoute Reports "Reports" iconReports
                 ]
             ]
         , nav [ class "sidebar__nav sidebar__nav--bottom" ]
-            [ navItem effectiveRoute Workspace "Workspace tools" iconSettings
+            [ a [ class "nav-item", Attr.href "/workspace?tab=communication" ] [ text "Communication" ]
+            , a [ class "nav-item", Attr.href "/workspace?tab=calendar" ] [ text "Calendar" ]
+            , navItem effectiveRoute Workspace "Workspace tools" iconSettings
             , if user.role == "admin" then
                 navItem effectiveRoute Administration "System administration" iconSettings
 
@@ -403,10 +404,10 @@ pageTitle model =
             "Lead"
 
         Cases ->
-            "Cases"
+            "Applications"
 
         CaseDetail _ ->
-            "Case"
+            "Application"
 
         Invoices ->
             "Invoices"
@@ -425,7 +426,7 @@ pageDescription : Model -> String
 pageDescription model =
     case model.route of
         Home ->
-            "Your pipeline, priorities, and recent activity in one place."
+            "See what needs attention and take the next action."
 
         Contacts ->
             "Manage client relationships and keep every conversation connected."

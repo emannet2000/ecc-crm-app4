@@ -15,6 +15,8 @@ import (
 )
 
 func registerDocumentRoutes(m *http.ServeMux) {
+	m.HandleFunc("POST /api/leads/{id}/cv", authMiddleware(handleLeadCVUpload))
+	m.HandleFunc("POST /api/leads/{id}/cv-review", authMiddleware(handleLeadCVReview))
 	m.HandleFunc("GET /api/documents/{id}/files", authMiddleware(handleFileVersions))
 	m.HandleFunc("POST /api/documents/{id}/files", authMiddleware(handleFileUpload))
 	m.HandleFunc("GET /api/documents/{id}/files/{version}", authMiddleware(handleFileDownload))
@@ -157,6 +159,10 @@ func (state *runtimeStore) handleFileUpload(w http.ResponseWriter, r *http.Reque
 			state.documents[i].FilePath = fmt.Sprintf("/api/documents/%s/files/%d", doc.ID, version)
 			state.documents[i].Status = "Received"
 			state.documents[i].DateReceived = organizationToday(r)
+			state.documents[i].ReviewedByID = ""
+			state.documents[i].ReviewedBy = ""
+			state.documents[i].ReviewedAt = ""
+			state.documents[i].ReviewedVersion = 0
 			state.documents[i].VerifiedBy = ""
 			state.documents[i].VerificationDate = ""
 			doc = state.documents[i]
@@ -200,7 +206,13 @@ func (state *runtimeStore) handleFileDownload(w http.ResponseWriter, r *http.Req
 	}
 	defer f.Close()
 	w.Header().Set("Content-Type", kind)
-	w.Header().Set("Content-Disposition", mime.FormatMediaType("attachment", map[string]string{"filename": name}))
+	disposition := "attachment"
+	mediaType, _, mimeErr := mime.ParseMediaType(kind)
+	if r.URL.Query().Get("preview") == "1" && mimeErr == nil && (mediaType == "application/pdf" || mediaType == "image/png" || mediaType == "image/jpeg" || mediaType == "text/plain") {
+		disposition = "inline"
+		w.Header().Set("Content-Security-Policy", "sandbox; default-src 'none'")
+	}
+	w.Header().Set("Content-Disposition", mime.FormatMediaType(disposition, map[string]string{"filename": name}))
 	w.Header().Set("X-Content-Type-Options", "nosniff")
 	w.Header().Set("Cache-Control", "private, no-store")
 	io.Copy(w, f)

@@ -70,7 +70,7 @@ func TestApplicationHandoffAcceptancePermissionsAndHistory(t *testing.T) {
 	assertStatus(t, rawUserRequest(t, h, recipient, "POST", endpoint, map[string]any{}), 200)
 	database.QueryRow("SELECT data FROM cases WHERE id=?", caseID).Scan(&record)
 	json.Unmarshal([]byte(record), &c)
-	if c.OwnerID != recipient.ID || c.AssignedOfficer != recipient.Name || c.NextAction != "Check passport evidence" {
+	if c.OwnerID != recipient.ID || c.AssignedOfficer != recipient.ID || c.NextAction != "Check passport evidence" {
 		t.Fatal("handoff did not transfer ownership and next action")
 	}
 	var doc Document

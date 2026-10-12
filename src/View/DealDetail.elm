@@ -7,6 +7,7 @@ import Html exposing (..)
 import Html.Attributes as Attr exposing (class, disabled, type_)
 import Html.Events exposing (onClick)
 import Types exposing (..)
+import View.StaffPicker as StaffPicker
 import View.Contacts exposing (contactById, contactList, stageBadge)
 import View.Dashboard exposing (ActivityEntry, PriorityAlert, activityPanel, alertsPanel, closingSoonAlert, dealEntry, overdueTaskAlert, staleDealAlert)
 import View.Deals exposing (dealStageOptions)
@@ -192,7 +193,7 @@ dealDetailView model d =
                       else
                         span [ class "detail-hero__chip" ]
                             [ iconUserTiny
-                            , span [] [ text d.owner ]
+                            , span [] [ StaffPicker.name d.owner ]
                             ]
                     ]
                 ]
@@ -265,7 +266,7 @@ dealDetailView model d =
                     Nothing
                     (div [ class "info-list" ]
                         [ infoRow iconCalendar "Close date" closeDateDisplay
-                        , infoRow iconUserTiny "Owner" ownerDisplay
+                        , StaffPicker.row iconUserTiny "Owner" d.owner
                         , infoRow iconCalendar "Created" createdDisplay
                         , infoRow iconDeals "Currency" d.currency
                         ]

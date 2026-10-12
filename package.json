@@ -2,10 +2,14 @@
   "name": "ecc-crm-verification",
   "private": true,
   "scripts": {
-    "test": "node --test tests/dom.test.cjs tests/administration.test.cjs tests/mobile.test.cjs",
+    "test": "node --test tests/dom.test.cjs tests/administration.test.cjs tests/mobile.test.cjs tests/workspace-interactions.test.cjs tests/usability-review.test.cjs",
     "test:live": "ECC_BROWSER_LIVE=true node --test tests/browser.test.cjs tests/journey.browser.cjs",
     "test:browser": "node --test tests/browser.test.cjs tests/journey.browser.cjs",
-    "test:integrations": "node tests/live-integrations.cjs"
+    "test:offline": "node --test tests/offline.browser.cjs",
+    "test:integrations": "node tests/live-integrations.cjs",
+    "test:consolidation": "node --test tests/consolidation.browser.cjs",
+    "test:workflow": "node --test tests/workflow.browser.cjs",
+    "test:performance": "cd golang-backend && go test -run '^$' -bench BenchmarkRepositoryWorkload -benchtime=3x -benchmem"
   },
   "devDependencies": {
     "puppeteer": "25.10.0",

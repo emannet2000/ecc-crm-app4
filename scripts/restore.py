@@ -7,6 +7,8 @@ import shutil
 import sqlite3
 import tarfile
 import tempfile
+import hashlib
+import json
 
 
 def restore(archive_path, destination):
@@ -21,13 +23,31 @@ def restore(archive_path, destination):
             members = archive.getmembers()
             for member in members:
                 parts = Path(member.name).parts
-                if not parts or parts[0] not in ('crm.sqlite3', 'uploads', 'auth-secret') or '..' in parts or Path(member.name).is_absolute() or not (member.isfile() or member.isdir()):
+                if not parts or parts[0] not in ('crm.sqlite3', 'uploads', 'auth-secret', 'backup-manifest.json') or '..' in parts or Path(member.name).is_absolute() or not (member.isfile() or member.isdir()):
                     raise ValueError('Unsafe archive entry')
             options = {'filter': 'data'} if hasattr(tarfile, 'data_filter') else {}
             archive.extractall(target, members=members, **options)
         database = target / 'crm.sqlite3'
         if not database.is_file():
             raise ValueError('Backup does not contain a database')
+        manifest = target / 'backup-manifest.json'
+        if manifest.exists():
+            checks = json.loads(manifest.read_text())
+            if checks.get('version') != 1 or not isinstance(checks.get('files'), dict) or 'crm.sqlite3' not in checks['files']:
+                raise ValueError('Backup manifest is invalid')
+            actual = {path.relative_to(target).as_posix() for path in target.rglob('*') if path.is_file() and path != manifest}
+            if actual != set(checks['files']):
+                raise ValueError('Backup manifest is missing files or has unexpected files')
+            for name, expected in checks['files'].items():
+                file = target / name
+                if not file.resolve().is_relative_to(target):
+                    raise ValueError('Backup manifest has an unsafe file path')
+                digest = hashlib.sha256()
+                with file.open('rb') as source:
+                    for chunk in iter(lambda: source.read(1024 * 1024), b''):
+                        digest.update(chunk)
+                if digest.hexdigest() != expected:
+                    raise ValueError('Backup manifest checksum does not match')
         with sqlite3.connect(f'file:{database}?mode=ro', uri=True) as connection:
             if connection.execute('PRAGMA integrity_check').fetchone()[0] != 'ok':
                 raise ValueError('Restored database failed integrity check')
@@ -43,6 +63,14 @@ def restore(archive_path, destination):
                     if not (target / 'uploads' / org / document / Path(old).name).is_file():
                         raise ValueError('Backup is missing a referenced document file')
                     connection.execute('UPDATE file_versions SET storage_path=? WHERE id=?', (str(new), file_id))
+            if connection.execute("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='file_gc'").fetchone()[0]:
+                for (old,) in connection.execute('SELECT path FROM file_gc').fetchall():
+                    # Generated uploads have an organization, document and random filename.
+                    parts = Path(old).parts
+                    if len(parts) < 4 or parts[-4] != 'uploads' or any(part in ('.', '..') or '\\' in part for part in parts[-3:]):
+                        raise ValueError('Invalid queued file cleanup path')
+                    new = destination / 'uploads' / Path(*parts[-3:])
+                    connection.execute('UPDATE file_gc SET path=? WHERE path=?', (str(new), old))
         os.rename(target, destination)
 
 

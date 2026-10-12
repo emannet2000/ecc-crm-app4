@@ -4,6 +4,7 @@ import Html exposing (..)
 import Html.Attributes exposing (attribute, class, disabled, selected, type_, value)
 import Html.Events exposing (onClick, onInput)
 import Types exposing (..)
+import View.Home exposing (managementChartsView)
 import View.Format exposing (formatCurrency)
 import View.Icons exposing (iconRefresh)
 
@@ -29,7 +30,7 @@ reportsView model =
                     [ card "Contacts" (String.fromInt report.contacts)
                     , card "Students" (String.fromInt report.students)
                     , card "Leads" (String.fromInt report.leads)
-                    , card "Active cases" (String.fromInt report.activeCases)
+                    , card "Active applications" (String.fromInt report.activeCases)
                     , card "Open tasks" (String.fromInt report.openTasks)
                     , card "Open pipeline" report.pipelineLabel
                     , card "Won deal value" report.wonLabel
@@ -41,7 +42,10 @@ reportsView model =
 
             _ ->
                 p [ class "content__empty-block" ] [ text "Loading reports…" ]
+        , Html.node "crm-work-outcomes" [] []
+        , details [] [ summary [] [ text "Commercial pipeline and activity charts" ], managementChartsView model ]
         , Html.node "crm-insights" [] []
+        , Html.node "crm-priority-queues" [] []
         , div [ class "reports-panels" ]
             [ exportsView model, auditView model ]
         ]
@@ -55,7 +59,7 @@ exportsView model =
         , p [] [ text "Choose a module to download all its records as a CSV file." ]
         , div [ class "workspace-toolbar" ]
             [ select [ value model.exportEntity, onInput SelectedExportEntity, attribute "aria-label" "Records to export" ]
-                (List.map (\entity -> option [ value entity, selected (entity == model.exportEntity) ] [ text (String.toUpper (String.left 1 entity) ++ String.dropLeft 1 entity) ])
+                (List.map (\entity -> option [ value entity, selected (entity == model.exportEntity) ] [ text (if entity == "cases" then "Applications" else String.toUpper (String.left 1 entity) ++ String.dropLeft 1 entity) ])
                     [ "contacts", "deals", "tasks", "schools", "students", "agents", "leads", "cases", "documents", "invoices", "payments", "partners", "activities" ]
                 )
             , button [ class "ecc-btn", type_ "button", onClick RequestedExport, disabled (model.exporting /= Nothing) ]
